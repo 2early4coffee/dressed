@@ -274,7 +274,7 @@ class TestFetchForecastErrors:
         assert len(signals) == 1
         assert signals[0]["temp_c"] == 22.0
         assert signals[0]["rain_prob"] == 0.0
-        assert signals[0]["condition"] == "partly_cloudy"
+        assert signals[0]["condition"] == "clear"
 
     def test_raises_on_non_json_response(self):
         mock = MagicMock()

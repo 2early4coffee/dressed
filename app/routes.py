@@ -105,9 +105,7 @@ def set_anon_cookie(response):
     return response
 
 # Helpers
-
-def _get_or_create_forecast(city: str, lat: float, lng: float,
-                            start_date: str, end_date: str) -> Optional[list]:
+def _get_or_create_forecast(city: str, lat: float, lng: float,start_date: str, end_date: str) -> Optional[list]:
     # Fetch a forecast from cache or Open-Meteo.
     from datetime import date as date_type
     date_range_key = forecast_date_range(
@@ -140,15 +138,10 @@ def _get_or_create_forecast(city: str, lat: float, lng: float,
         return None
 
     # Store in cache
-    if cached:
-        cached.response    = signals[0]["__raw"] if signals and "__raw" in signals[0] else {}
-        cached.fetched_at  = datetime.now(timezone.utc)
-    else:
-        pass
     try:
         if cached:
-            cached.response   = {"signals": signals}
-            cached.fetched_at = datetime.now(timezone.utc)
+            cached.response    = signals[0]["__raw"] if signals and "__raw" in signals[0] else {}
+            cached.fetched_at  = datetime.now(timezone.utc)
         else:
             new_cache = ForecastCache(
                 city       = cache_key,

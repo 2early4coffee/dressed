@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="{% block meta_description %}Dressed — weather-aware outfit advice and trip packing lists.{% endblock %}">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+
+    <title>{% block title %}Dressed{% endblock %} — Dressed</title>
+
+    {# Favicon #}
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>👕</text></svg>">
+
+    {# Fonts #}
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    {# Tabler Icons CDN #}
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/3.19.0/tabler-icons.min.css">
+
+    {# App CSS #}
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+
+    {% block extra_head %}{% endblock %}
+</head>
+
+<body class="{% block body_class %}{% endblock %}">
+
+{# Navigation #}
+<nav class="nav" aria-label="Main navigation">
+    <div class="nav-inner">
+
+        <a href="{{ url_for('main.index') }}" class="nav-brand" aria-label="Dressed home">
+            dressed<span class="nav-brand-dot">.</span>
+        </a>
+
+        {# Mobile menu toggle #}
+        <button
+                class="nav-mobile-toggle"
+                aria-label="Open navigation menu"
+                aria-expanded="false"
+                aria-controls="nav-menu"
+                id="nav-toggle"
+        >
+            <i class="ti ti-menu-2" aria-hidden="true"></i>
+        </button>
+
+        <ul class="nav-links" id="nav-menu" role="list">
+            <li>
+                <a
+                        href="{{ url_for('main.index') }}"
+                        class="nav-link {% if request.endpoint == 'main.index' %}active{% endif %}"
+                        {% if request.endpoint == 'main.index' %}aria-current="page"{% endif %}
+                >
+                <i class="ti ti-sun" aria-hidden="true"></i>
+                Today
+                </a>
+            </li>
+            <li>
+                <a
+                        href="{{ url_for('main.trip') }}"
+                        class="nav-link {% if request.endpoint in ('main.trip', 'main.trip_create') %}active{% endif %}"
+                        {% if request.endpoint in ('main.trip', 'main.trip_create') %}aria-current="page"{% endif %}
+                >
+                <i class="ti ti-luggage" aria-hidden="true"></i>
+                Plan a trip
+                </a>
+            </li>
+            <li>
+                <a
+                        href="{{ url_for('main.trips_list') }}"
+                        class="nav-link {% if request.endpoint == 'main.trips_list' %}active{% endif %}"
+                        {% if request.endpoint == 'main.trips_list' %}aria-current="page"{% endif %}
+                >
+                <i class="ti ti-list" aria-hidden="true"></i>
+                My trips
+                </a>
+            </li>
+            <li>
+                <a
+                        href="{{ url_for('main.profile') }}"
+                        class="nav-link {% if request.endpoint == 'main.profile' %}active{% endif %}"
+                        {% if request.endpoint == 'main.profile' %}aria-current="page"{% endif %}
+                >
+                <i class="ti ti-adjustments-horizontal" aria-hidden="true"></i>
+                Preferences
+                </a>
+            </li>
+        </ul>
+
+        {# Auth links #}
+        <div class="nav-auth">
+            {% if user %}
+            <span class="nav-username" aria-label="Signed in as {{ user.username }}">
+            <i class="ti ti-user-circle" aria-hidden="true"></i>
+            {{ user.username }}
+          </span>
+            <a href="{{ url_for('auth.logout') }}" class="nav-link nav-link-sm">Sign out</a>
+            {% else %}
+            <a href="{{ url_for('auth.login') }}" class="nav-link nav-link-sm {% if request.endpoint == 'auth.login' %}active{% endif %}">
+                Sign in
+            </a>
+            <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-sm">
+                Sign up
+            </a>
+            {% endif %}
+        </div>
+
+    </div>
+</nav>
+
+{# Flash messages #}
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+<div class="flash-container" role="alert" aria-live="polite">
+    {% for category, message in messages %}
+    <div class="flash flash-{{ category }}">
+        <i class="ti ti-{% if category == 'success' %}circle-check{% elif category == 'error' %}alert-circle{% else %}info-circle{% endif %}" aria-hidden="true"></i>
+        <span>{{ message }}</span>
+        <button class="flash-close" aria-label="Dismiss">
+            <i class="ti ti-x" aria-hidden="true"></i>
+        </button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+{% endwith %}
+
+{# Page content #}
+<main id="main-content" class="main-content" tabindex="-1">
+    {% block content %}{% endblock %}
+</main>
+
+{# Footer #}
+<footer class="footer" role="contentinfo">
+    <div class="footer-inner">
+        <span class="footer-brand">dressed.</span>
+        <span class="footer-copy">Weather-aware outfits, built for travellers.</span>
+        <nav class="footer-links" aria-label="Footer navigation">
+            <a href="{{ url_for('main.index') }}" class="footer-link">Today</a>
+            <a href="{{ url_for('main.trip') }}" class="footer-link">Plan a trip</a>
+            <a href="{{ url_for('main.profile') }}" class="footer-link">Preferences</a>
+            {% if not user %}
+            <a href="{{ url_for('auth.register') }}" class="footer-link">Sign up</a>
+            {% endif %}
+        </nav>
+    </div>
+</footer>
+
+{# JavaScript modules #}
+<script src="{{ url_for('static', filename='js/csrf.js') }}" defer></script>
+
+{% block scripts %}{% endblock %}
+
+{# Inline nav mobile toggle #}
+<script>
+    (function () {
+        const toggle = document.getElementById('nav-toggle');
+        const menu   = document.getElementById('nav-menu');
+        if (!toggle || !menu) return;
+
+        toggle.addEventListener('click', function () {
+            const open = menu.classList.toggle('nav-open');
+            toggle.setAttribute('aria-expanded', open);
+            toggle.setAttribute('aria-label', open ? 'Close navigation menu' : 'Open navigation menu');
+            // Update icon
+            const icon = toggle.querySelector('i');
+            if (icon) {
+                icon.className = open ? 'ti ti-x' : 'ti ti-menu-2';
+            }
+        });
+
+        // Close menu on outside click
+        document.addEventListener('click', function (e) {
+            if (!toggle.contains(e.target) && !menu.contains(e.target)) {
+                menu.classList.remove('nav-open');
+                toggle.setAttribute('aria-expanded', 'false');
+                toggle.setAttribute('aria-label', 'Open navigation menu');
+                const icon = toggle.querySelector('i');
+                if (icon) icon.className = 'ti ti-menu-2';
+            }
+        });
+
+        // Close menu on Escape
+        document.addEventListener('keydown', function (e) {
+            if (e.key === 'Escape' && menu.classList.contains('nav-open')) {
+                menu.classList.remove('nav-open');
+                toggle.setAttribute('aria-expanded', 'false');
+                toggle.focus();
+            }
+        });
+    })();
+
+    // Flash message dismiss
+    document.querySelectorAll('.flash-close').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            const flash = btn.closest('.flash');
+            if (flash) {
+                flash.style.opacity = '0';
+                flash.style.transform = 'translateY(-8px)';
+                setTimeout(function () { flash.remove(); }, 200);
+            }
+        });
+    });
+
+    // Auto-dismiss flash messages after 5 seconds
+    setTimeout(function () {
+        document.querySelectorAll('.flash').forEach(function (flash) {
+            flash.style.opacity = '0';
+            flash.style.transform = 'translateY(-8px)';
+            setTimeout(function () { flash.remove(); }, 200);
+        });
+    }, 5000);
+</script>
+
+</body>
+</html>

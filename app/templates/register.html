@@ -1,0 +1,219 @@
+{% extends "layout.html" %}
+
+{% block title %}Sign in{% endblock %}
+{% block meta_description %}Sign in to your Dressed account to access your saved trips and outfit preferences.{% endblock %}
+
+{% block extra_head %}
+<style>
+    .auth-page {
+        min-height: calc(100vh - var(--nav-h));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: var(--sp-8) var(--sp-4);
+    }
+
+    .auth-card {
+        width: 100%;
+        max-width: 440px;
+    }
+
+    .auth-header {
+        text-align: center;
+        margin-bottom: var(--sp-8);
+    }
+
+    .auth-logo {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--green-700);
+        letter-spacing: -0.025em;
+        margin-bottom: var(--sp-2);
+        text-decoration: none;
+        display: inline-block;
+    }
+
+    .auth-logo span { color: var(--green-400); }
+
+    .auth-title {
+        font-size: 1.5rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: var(--sp-1);
+        letter-spacing: -0.02em;
+    }
+
+    .auth-subtitle {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+    }
+
+    .auth-form {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sp-5);
+    }
+
+    .auth-footer {
+        text-align: center;
+        margin-top: var(--sp-6);
+        font-size: 0.875rem;
+        color: var(--text-muted);
+    }
+
+    .auth-footer a {
+        color: var(--green-600);
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    .auth-footer a:hover { color: var(--green-700); }
+
+    .password-input-wrap {
+        position: relative;
+    }
+
+    .password-input-wrap .form-input {
+        padding-right: 2.75rem;
+    }
+
+    .password-toggle {
+        position: absolute;
+        right: 0.9rem;
+        top: 50%;
+        transform: translateY(-50%);
+        background: none;
+        border: none;
+        cursor: pointer;
+        color: var(--text-muted);
+        padding: var(--sp-1);
+        border-radius: var(--r-xs);
+        display: flex;
+        align-items: center;
+        transition: color var(--tx-fast);
+    }
+
+    .password-toggle:hover { color: var(--text-secondary); }
+    .password-toggle .ti { font-size: 1rem; }
+
+    .form-row-between {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="auth-page">
+    <div class="auth-card">
+
+        {# Header #}
+        <div class="auth-header">
+            <a href="{{ url_for('main.index') }}" class="auth-logo">dressed<span>.</span></a>
+            <h1 class="auth-title">Welcome back</h1>
+            <p class="auth-subtitle">Sign in to access your trips and preferences</p>
+        </div>
+
+        {# Card #}
+        <div class="card">
+
+            {# Error message #}
+            {% if error %}
+            <div class="alert alert-error" role="alert" style="margin-bottom:var(--sp-5)">
+                <i class="ti ti-alert-circle" aria-hidden="true"></i>
+                <span>{{ error }}</span>
+            </div>
+            {% endif %}
+
+            <form
+                    action="{{ url_for('auth.login_post') }}{% if request.args.get('next') %}?next={{ request.args.get('next') }}{% endif %}"
+                    method="POST"
+                    class="auth-form"
+                    novalidate
+                    aria-label="Sign in form"
+            >
+
+                {# Username #}
+                <div class="form-group">
+                    <label class="form-label" for="username">Username</label>
+                    <div class="form-input-wrap">
+                        <i class="ti ti-user form-input-icon" aria-hidden="true"></i>
+                        <input
+                                class="form-input has-icon"
+                                type="text"
+                                id="username"
+                                name="username"
+                                value="{{ username or '' }}"
+                                autocomplete="username"
+                                autocapitalize="none"
+                                autocorrect="off"
+                                spellcheck="false"
+                                required
+                                aria-required="true"
+                                placeholder="Your username"
+                                autofocus
+                        >
+                    </div>
+                </div>
+
+                {# Password #}
+                <div class="form-group" style="margin-bottom:0">
+                    <div class="form-row-between">
+                        <label class="form-label" for="password">Password</label>
+                    </div>
+                    <div class="password-input-wrap">
+                        <input
+                                class="form-input"
+                                type="password"
+                                id="password"
+                                name="password"
+                                autocomplete="current-password"
+                                required
+                                aria-required="true"
+                                placeholder="Your password"
+                        >
+                        <button
+                                type="button"
+                                class="password-toggle"
+                                aria-label="Show password"
+                                id="toggle-password"
+                        >
+                            <i class="ti ti-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-block btn-lg">
+                    <i class="ti ti-login" aria-hidden="true"></i>
+                    Sign in
+                </button>
+
+            </form>
+        </div>
+
+        <div class="auth-footer">
+            Don't have an account?
+            <a href="{{ url_for('auth.register') }}">Sign up — it's free</a>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (function () {
+        const btn   = document.getElementById('toggle-password');
+        const input = document.getElementById('password');
+        if (!btn || !input) return;
+
+        btn.addEventListener('click', function () {
+            const show = input.type === 'password';
+            input.type = show ? 'text' : 'password';
+            btn.querySelector('i').className = show ? 'ti ti-eye-off' : 'ti ti-eye';
+            btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+        });
+    })();
+</script>
+{% endblock %}

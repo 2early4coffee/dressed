@@ -1,0 +1,756 @@
+{% extends "layout.html" %}
+
+{% block title %}Today's Outfit{% endblock %}
+{% block meta_description %}Get a personalised outfit recommendation based on today's weather in your city.{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Page background */
+    .index-page {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: var(--sp-8) var(--sp-6) var(--sp-12);
+    }
+
+    /* City bar */
+    .city-bar {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-3);
+        margin-bottom: var(--sp-8);
+        flex-wrap: wrap;
+    }
+
+    .city-input-wrap {
+        position: relative;
+        flex: 1;
+        min-width: 200px;
+        max-width: 320px;
+    }
+
+    .city-input-icon {
+        position: absolute;
+        left: 0.9rem;
+        top: 50%;
+        transform: translateY(-50%);
+        color: var(--text-muted);
+        font-size: 1.1rem;
+        pointer-events: none;
+    }
+
+    .city-input {
+        width: 100%;
+        padding: 0.65rem 1rem 0.65rem 2.75rem;
+        border-radius: var(--r-full);
+        border: 1.5px solid var(--border);
+        background: rgba(255,255,255,0.85);
+        font-family: var(--font-sans);
+        font-size: 0.95rem;
+        color: var(--text-primary);
+        outline: none;
+        transition: border-color var(--tx-fast), box-shadow var(--tx-fast);
+    }
+
+    .city-input:focus {
+        border-color: var(--green-500);
+        box-shadow: 0 0 0 3px rgba(45,122,82,0.12);
+    }
+
+    .city-input::placeholder { color: var(--text-muted); }
+
+    .locate-btn {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-2);
+        padding: 0.65rem 1.1rem;
+        border-radius: var(--r-full);
+        border: 1.5px solid var(--border);
+        background: rgba(255,255,255,0.85);
+        font-family: var(--font-sans);
+        font-size: 0.88rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: border-color var(--tx-fast), background var(--tx-fast), color var(--tx-fast);
+        white-space: nowrap;
+    }
+
+    .locate-btn:hover {
+        border-color: var(--green-500);
+        background: var(--green-50);
+        color: var(--green-700);
+    }
+
+    .date-chip {
+        margin-left: auto;
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        font-family: var(--font-mono);
+        white-space: nowrap;
+    }
+
+    /* Two-column grid */
+    .home-grid {
+        display: grid;
+        grid-template-columns: 1fr 340px;
+        gap: var(--sp-6);
+        align-items: start;
+    }
+
+    /* Weather card */
+    .weather-card {
+        position: relative;
+        overflow: hidden;
+    }
+
+    .weather-card::before {
+        content: '';
+        position: absolute;
+        top: -60px;
+        right: -60px;
+        width: 220px;
+        height: 220px;
+        background: radial-gradient(circle, rgba(45,122,82,0.1) 0%, transparent 70%);
+        pointer-events: none;
+    }
+
+    .weather-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        margin-bottom: var(--sp-6);
+    }
+
+    .weather-location {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-2);
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+
+    .weather-location .ti { font-size: 1rem; color: var(--green-500); }
+
+    .weather-main {
+        display: flex;
+        align-items: flex-end;
+        gap: var(--sp-6);
+        margin-bottom: var(--sp-6);
+    }
+
+    .temp-number {
+        font-size: 5.5rem;
+        font-weight: 700;
+        letter-spacing: -0.04em;
+        color: var(--green-900);
+        line-height: 1;
+    }
+
+    .temp-unit {
+        font-size: 2.2rem;
+        font-weight: 500;
+        color: var(--text-muted);
+        vertical-align: super;
+        margin-left: 2px;
+    }
+
+    .temp-meta { padding-bottom: 0.6rem; }
+
+    .feels-like {
+        font-size: 0.85rem;
+        color: var(--text-muted);
+        margin-bottom: var(--sp-2);
+    }
+
+    .temp-range {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        font-family: var(--font-mono);
+    }
+
+    /* Weather stats strip */
+    .weather-stats {
+        display: flex;
+        gap: 0;
+        border-top: 1px solid var(--border);
+        padding-top: var(--sp-5);
+        margin-bottom: var(--sp-5);
+    }
+
+    .stat-item {
+        flex: 1;
+        text-align: center;
+        padding: 0 var(--sp-2);
+        border-right: 1px solid var(--border);
+    }
+
+    .stat-item:last-child { border-right: none; }
+
+    .stat-label {
+        font-size: 0.7rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.07em;
+        margin-bottom: var(--sp-1);
+    }
+
+    .stat-value {
+        font-family: var(--font-mono);
+        font-size: 1rem;
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+
+    .stat-value.rain  { color: var(--accent-blue); }
+    .stat-value.uv    { color: #B7950B; }
+    .stat-value.humid { color: var(--green-600); }
+
+    /* ── 5-day forecast strip ── */
+    .forecast-strip {
+        display: flex;
+        gap: var(--sp-2);
+    }
+
+    .forecast-day {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: var(--sp-1);
+        padding: 0.7rem 0.25rem;
+        border-radius: var(--r-md);
+        background: rgba(255,255,255,0.45);
+        border: 1px solid var(--border);
+        cursor: pointer;
+        transition: background var(--tx-fast), border-color var(--tx-fast);
+        text-align: center;
+    }
+
+    .forecast-day:hover {
+        background: rgba(45,122,82,0.06);
+        border-color: rgba(45,122,82,0.2);
+    }
+
+    .forecast-day.active {
+        background: rgba(45,122,82,0.1);
+        border-color: var(--green-500);
+    }
+
+    .day-name {
+        font-size: 0.68rem;
+        font-weight: 700;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .day-emoji { font-size: 1.25rem; line-height: 1; }
+
+    .day-temp {
+        font-family: var(--font-mono);
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--text-primary);
+    }
+
+    .day-rain {
+        font-size: 0.68rem;
+        color: var(--accent-blue);
+        font-weight: 600;
+    }
+
+    /* ── Advisor notes ── */
+    .notes-card {
+        background: rgba(244,132,95,0.07);
+        border: 1px solid rgba(244,132,95,0.2);
+        border-radius: var(--r-lg);
+        padding: var(--sp-4) var(--sp-5);
+        margin-top: var(--sp-5);
+    }
+
+    .note-row {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--sp-3);
+        padding: var(--sp-2) 0;
+        border-bottom: 1px solid rgba(244,132,95,0.1);
+    }
+
+    .note-row:last-child { border-bottom: none; padding-bottom: 0; }
+    .note-row:first-child { padding-top: 0; }
+
+    .note-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent-warm);
+        flex-shrink: 0;
+        margin-top: 8px;
+    }
+
+    .note-text {
+        font-size: 0.85rem;
+        color: #8B3A1E;
+        line-height: 1.5;
+    }
+
+    /* Trip CTA */
+    .trip-cta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--sp-4);
+        padding: var(--sp-5) var(--sp-6);
+        border-radius: var(--r-xl);
+        background: linear-gradient(135deg, var(--green-700) 0%, var(--green-500) 100%);
+        color: white;
+        text-decoration: none;
+        margin-top: var(--sp-5);
+        transition: opacity var(--tx-fast), transform var(--tx-fast);
+        box-shadow: 0 4px 20px rgba(45,122,82,0.28);
+    }
+
+    .trip-cta:hover {
+        opacity: 0.96;
+        transform: translateY(-1px);
+        color: white;
+    }
+
+    .trip-cta-text h3 {
+        font-size: 1rem;
+        font-weight: 700;
+        margin-bottom: var(--sp-1);
+    }
+
+    .trip-cta-text p {
+        font-size: 0.82rem;
+        opacity: 0.82;
+        line-height: 1.4;
+    }
+
+    .trip-cta-arrow {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.18);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        font-size: 1.2rem;
+    }
+
+    /* Outfit panel */
+    .outfit-panel {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sp-5);
+    }
+
+    /* Outfit hero */
+    .outfit-image-wrap {
+        width: 100%;
+        height: 190px;
+        border-radius: var(--r-lg);
+        background: linear-gradient(135deg, rgba(45,122,82,0.12) 0%, rgba(82,183,136,0.08) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: var(--sp-4);
+        border: 1px solid var(--border);
+        overflow: hidden;
+    }
+
+    .outfit-image-wrap img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        border-radius: var(--r-lg);
+    }
+
+    .outfit-emoji-placeholder {
+        font-size: 4rem;
+        opacity: 0.5;
+    }
+
+    .outfit-name {
+        font-size: 1.1rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: var(--sp-2);
+    }
+
+    .outfit-tags {
+        display: flex;
+        gap: var(--sp-2);
+        flex-wrap: wrap;
+    }
+
+    /* Clothing item rows */
+    .item-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sp-2);
+    }
+
+    .item-row {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-3);
+        padding: 0.6rem 0.85rem;
+        border-radius: var(--r-md);
+        background: rgba(255,255,255,0.55);
+        border: 1px solid rgba(45,122,82,0.08);
+        transition: background var(--tx-fast);
+    }
+
+    .item-row:hover { background: rgba(255,255,255,0.9); }
+
+    .item-icon {
+        width: 36px;
+        height: 36px;
+        border-radius: var(--r-sm);
+        background: var(--green-100);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.05rem;
+        flex-shrink: 0;
+    }
+
+    .item-icon.rain { background: rgba(40,116,166,0.1); }
+    .item-icon.sun  { background: rgba(245,185,66,0.14); }
+    .item-icon.layer{ background: rgba(45,122,82,0.08); }
+
+    .item-name {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--text-primary);
+        flex: 1;
+    }
+
+    .item-cat {
+        font-size: 0.72rem;
+        color: var(--text-muted);
+        font-weight: 500;
+    }
+
+    /* Loading skeleton */
+    .skeleton {
+        background: linear-gradient(90deg,
+        rgba(255,255,255,0.4) 25%,
+        rgba(255,255,255,0.7) 50%,
+        rgba(255,255,255,0.4) 75%
+        );
+        background-size: 200% 100%;
+        animation: shimmer 1.4s infinite;
+        border-radius: var(--r-md);
+    }
+
+    @keyframes shimmer {
+        0%   { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
+    }
+
+    .skeleton-temp {
+        height: 88px;
+        width: 160px;
+        border-radius: var(--r-md);
+        margin-bottom: var(--sp-4);
+    }
+
+    .skeleton-line {
+        height: 16px;
+        border-radius: var(--r-full);
+        margin-bottom: var(--sp-3);
+    }
+
+    /* Error state */
+    .weather-error {
+        text-align: center;
+        padding: var(--sp-10) var(--sp-6);
+    }
+
+    .weather-error .ti {
+        font-size: 2.5rem;
+        color: var(--text-muted);
+        display: block;
+        margin-bottom: var(--sp-4);
+    }
+
+    /* Responsive */
+    @media (max-width: 840px) {
+        .home-grid {
+            grid-template-columns: 1fr;
+        }
+        .outfit-panel { order: -1; }
+        .temp-number  { font-size: 4rem; }
+        .date-chip    { display: none; }
+    }
+
+    @media (max-width: 480px) {
+        .index-page { padding: var(--sp-5) var(--sp-4) var(--sp-8); }
+        .city-bar   { gap: var(--sp-2); }
+        .forecast-strip { gap: var(--sp-1); }
+        .forecast-day { padding: 0.6rem 0.1rem; }
+        .day-name   { font-size: 0.6rem; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="index-page">
+
+    {# City search bar  #}
+    <div class="city-bar" role="search" aria-label="Location search">
+        <div class="city-input-wrap">
+            <i class="ti ti-search city-input-icon" aria-hidden="true"></i>
+            <input
+                    id="city-input"
+                    class="city-input"
+                    type="text"
+                    placeholder="Search city..."
+                    value="{{ last_city }}"
+                    autocomplete="off"
+                    spellcheck="false"
+                    aria-label="Enter a city name to get the weather"
+                    aria-autocomplete="none"
+            >
+        </div>
+
+        <button
+                id="locate-btn"
+                class="locate-btn"
+                type="button"
+                aria-label="Use my current location"
+        >
+            <i class="ti ti-current-location" aria-hidden="true"></i>
+            Locate me
+        </button>
+
+        <span class="date-chip" aria-label="Today's date" id="date-display"></span>
+    </div>
+
+    {# Two-column grid #}
+    <div class="home-grid">
+
+        {# Left: weather + notes + CTA #}
+        <div>
+
+            {# Weather card that is populated by outfit.js #}
+            <div class="card weather-card" id="weather-card" aria-live="polite" aria-label="Current weather">
+
+                {# Loading skeleton (shown until JS loads data) #}
+                <div id="weather-skeleton">
+                    <div class="skeleton skeleton-temp"></div>
+                    <div class="skeleton skeleton-line" style="width:60%"></div>
+                    <div class="skeleton skeleton-line" style="width:40%"></div>
+                    <div style="display:flex;gap:0.5rem;margin-top:1rem;">
+                        {% for _ in range(5) %}
+                        <div class="skeleton" style="flex:1;height:80px;border-radius:var(--r-md)"></div>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                {# Actual weather content that is hidden until JS populates #}
+                <div id="weather-content" hidden>
+
+                    <div class="weather-top">
+            <span class="weather-location" id="weather-location">
+              <i class="ti ti-map-pin" aria-hidden="true"></i>
+              <span id="location-name">--</span>
+            </span>
+                        <span class="chip" id="condition-badge" aria-live="polite"></span>
+                    </div>
+
+                    <div class="weather-main">
+                        <div>
+                            <div aria-label="Current temperature">
+                                <span class="temp-number" id="temp-display">--</span><span class="temp-unit">°C</span>
+                            </div>
+                        </div>
+                        <div class="temp-meta">
+                            <div class="feels-like" id="feels-like-display"></div>
+                            <div class="temp-range" id="temp-range-display"></div>
+                        </div>
+                    </div>
+
+                    <div class="weather-stats" role="list" aria-label="Weather details">
+                        <div class="stat-item" role="listitem">
+                            <div class="stat-label">Rain</div>
+                            <div class="stat-value rain" id="stat-rain">--%</div>
+                        </div>
+                        <div class="stat-item" role="listitem">
+                            <div class="stat-label">UV</div>
+                            <div class="stat-value uv" id="stat-uv">--</div>
+                        </div>
+                        <div class="stat-item" role="listitem">
+                            <div class="stat-label">Wind</div>
+                            <div class="stat-value" id="stat-wind">-- km/h</div>
+                        </div>
+                        <div class="stat-item" role="listitem">
+                            <div class="stat-label">Humidity</div>
+                            <div class="stat-value humid" id="stat-humid">--%</div>
+                        </div>
+                    </div>
+
+                    {# 5-day strip #}
+                    <div class="forecast-strip" id="forecast-strip" role="list" aria-label="5-day forecast">
+                        {# Populated by forecast-strip.js #}
+                    </div>
+
+                </div>
+
+                {# Error state #}
+                <div id="weather-error" hidden class="weather-error">
+                    <i class="ti ti-cloud-off" aria-hidden="true"></i>
+                    <p style="font-size:0.95rem;font-weight:600;color:var(--text-secondary);margin-bottom:0.5rem;">
+                        Could not load weather
+                    </p>
+                    <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1rem;">
+                        Check your connection or try a different city.
+                    </p>
+                    <button class="btn btn-secondary btn-sm" id="retry-btn" type="button">
+                        <i class="ti ti-refresh" aria-hidden="true"></i>
+                        Try again
+                    </button>
+                </div>
+
+            </div>
+
+            {# Advisor notes which is populated by outfit.js #}
+            <div id="notes-container" hidden>
+                <div class="notes-card" role="region" aria-label="Advisor notes" id="notes-card">
+                    {# Notes injected by outfit.js #}
+                </div>
+            </div>
+
+            {# Trip CTA #}
+            <a
+                    href="{{ url_for('main.trip') }}"
+                    class="trip-cta"
+                    aria-label="Plan a trip packing list"
+            >
+                <div class="trip-cta-text">
+                    <h3>Planning a trip?</h3>
+                    <p>Build a weather-aware packing list for every destination</p>
+                </div>
+                <div class="trip-cta-arrow" aria-hidden="true">
+                    <i class="ti ti-arrow-right"></i>
+                </div>
+            </a>
+
+        </div>
+
+        {# Right: outfit panel #}
+        <div class="outfit-panel">
+
+            {# Outfit hero card #}
+            <div class="card" role="region" aria-label="Today's outfit recommendation" id="outfit-hero">
+
+                <div class="card-label">Today's outfit</div>
+
+                {# Outfit image / placeholder #}
+                <div class="outfit-image-wrap" id="outfit-image-wrap">
+                    <div class="outfit-emoji-placeholder" id="outfit-placeholder" aria-hidden="true">👕</div>
+                    <img
+                            id="outfit-img"
+                            src=""
+                            alt=""
+                            hidden
+                            style="width:100%;height:100%;object-fit:cover;"
+                    >
+                </div>
+
+                {# Loading skeleton #}
+                <div id="outfit-skeleton">
+                    <div class="skeleton skeleton-line" style="width:70%;margin-bottom:0.5rem"></div>
+                    <div class="skeleton skeleton-line" style="width:40%;height:22px"></div>
+                </div>
+
+                <div id="outfit-meta" hidden>
+                    <div class="outfit-name" id="outfit-name">--</div>
+                    <div class="outfit-tags" id="outfit-tags"></div>
+                </div>
+
+            </div>
+
+            {# Clothing items card #}
+            <div class="card card-sm" role="region" aria-label="Clothing items" id="items-card">
+
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--sp-4)">
+                    <span style="font-size:0.9rem;font-weight:700;color:var(--text-primary)">What to wear</span>
+                    <span
+                            style="font-size:0.78rem;color:var(--text-muted);font-family:var(--font-mono)"
+                            id="items-count"
+                            aria-live="polite"
+                    ></span>
+                </div>
+
+                {# Loading skeleton #}
+                <div id="items-skeleton">
+                    {% for _ in range(4) %}
+                    <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.5rem">
+                        <div class="skeleton" style="width:36px;height:36px;border-radius:var(--r-sm);flex-shrink:0"></div>
+                        <div class="skeleton skeleton-line" style="flex:1;margin:0"></div>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <ul class="item-list" id="item-list" role="list" aria-label="Clothing items list" hidden>
+                    {# Populated by outfit.js #}
+                </ul>
+
+            </div>
+
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/location.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/outfit.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/forecast-strip.js') }}" defer></script>
+<script>
+    // Set today's date in the chip
+    const dateDisplay = document.getElementById('date-display');
+    if (dateDisplay) {
+        const now = new Date();
+        dateDisplay.textContent = now.toLocaleDateString('en-GB', {
+            weekday: 'short', day: 'numeric', month: 'short'
+        });
+    }
+
+    // City input that is submitted on Enter
+    const cityInput = document.getElementById('city-input');
+    if (cityInput) {
+        cityInput.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const city = cityInput.value.trim();
+                if (city) {
+                    window.loadOutfitForCity && window.loadOutfitForCity(city);
+                }
+            }
+        });
+    }
+
+    // Retry button
+    const retryBtn = document.getElementById('retry-btn');
+    if (retryBtn) {
+        retryBtn.addEventListener('click', function () {
+            const city = cityInput ? cityInput.value.trim() : '';
+            if (city) {
+                window.loadOutfitForCity && window.loadOutfitForCity(city);
+            } else {
+                window.locateAndLoad && window.locateAndLoad();
+            }
+        });
+    }
+</script>
+{% endblock %}

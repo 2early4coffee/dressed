@@ -122,7 +122,7 @@ def _get_or_create_forecast(city: str, lat: float, lng: float,start_date: str, e
     ttl = current_app.config.get("FORECAST_CACHE_TTL_SECONDS", 3600)
 
     if cached and cached.is_fresh(ttl):
-        return signals_from_cache(cached.response)
+        return _fetch_signals_from_cache_response(cached.response)
 
     # Fetch from Open-Meteo
     try:
@@ -134,7 +134,7 @@ def _get_or_create_forecast(city: str, lat: float, lng: float,start_date: str, e
         # Serve stale cache if available
         if cached:
             logger.info("Serving stale cache for %s", city)
-            return signals_from_cache(cached.response)
+            return _fetch_signals_from_cache_response(cached.response)
         return None
 
     # Store in cache
@@ -161,7 +161,7 @@ def _get_or_create_forecast(city: str, lat: float, lng: float,start_date: str, e
 def _fetch_signals_from_cache_response(response: dict) -> list:
     if "signals" in response:
         return response["signals"]
-    return signals_from_cache(response)
+    return _fetch_signals_from_cache_response(cached.response)
 
 
 def _get_today_range():
@@ -533,6 +533,12 @@ def api_outfit():
 
     signal  = signals[0]
     outfit  = get_outfit(signal, g.profile_dict)
+
+    outfit["uv_index"]     = signal.get("uv_index", 0)
+    outfit["wind_kph"]     = signal.get("wind_kph", 0)
+    outfit["humidity_pct"] = signal.get("humidity_pct", 0)
+    outfit["temp_min_c"]   = signal.get("temp_min_c", 0)
+    outfit["city_name"]    = city or "Your location"
 
     # Save last-used city in cookie (set on response)
     response = make_response(jsonify(outfit))

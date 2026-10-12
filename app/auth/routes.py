@@ -91,7 +91,7 @@ def _validate_password(password: str) -> list[str]:
 
 @auth.route("/register", methods=["GET"])
 def register():
-    if g.user_id:
+    if getattr(g, 'user_id', None):
         return redirect(url_for("main.index"))
     return render_template("register.html")
 
@@ -167,7 +167,7 @@ def register_post():
 @auth.route("/login", methods=["GET"])
 def login():
     # Login form.
-    if g.user_id:
+    if getattr(g, 'user_id', None):
         return redirect(url_for("main.index"))
     return render_template("login.html")
 

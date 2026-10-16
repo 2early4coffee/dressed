@@ -1,4 +1,4 @@
-import uuid
+﻿import uuid
 import logging
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -17,7 +17,7 @@ from app.models import (
 )
 from app.core import packing as packing_ops
 from app.core.weather import fetch_forecast, get_dominant_signal, WeatherFetchError, signals_from_cache, forecast_date_range
-from app.core.geocoder import geocode, geocode_multiple, build_cache_key, extract_country
+from app.core.geocoder import geocode, geocode_multiple, build_cache_key, extract_country, reverse_geocode
 from app.core.advisor import get_outfit, build_packing_list, DEFAULT_PROFILE
 from app.core.sequence import get_zone_tip
 
@@ -27,7 +27,6 @@ main = Blueprint("main", __name__)
 
 
 # Request hooks - session + profile resolution
-
 
 @main.before_request
 def load_current_user_and_session():
@@ -62,7 +61,7 @@ def load_current_user_and_session():
                     session_token=g.session_token
                 ).first()
             else:
-                # Expired or not found - clear cookie on response
+                # Expired or not found, clear cookie on response
                 g.session_token = None
                 g.anon_session  = None
 
@@ -140,7 +139,7 @@ def _get_or_create_forecast(city: str, lat: float, lng: float,start_date: str, e
     # Store in cache
     try:
         if cached:
-            cached.response    = signals[0]["__raw"] if signals and "__raw" in signals[0] else {}
+            cached.response   = {"signals": signals}
             cached.fetched_at  = datetime.now(timezone.utc)
         else:
             new_cache = ForecastCache(
@@ -161,7 +160,14 @@ def _get_or_create_forecast(city: str, lat: float, lng: float,start_date: str, e
 def _fetch_signals_from_cache_response(response: dict) -> list:
     if "signals" in response:
         return response["signals"]
-    return _fetch_signals_from_cache_response(cached.response)
+    # Guard against corrupt/empty cache entries (no 'daily' key)
+    if not response or "daily" not in response:
+        logger.warning(
+            "Cache entry has no usable data (keys: %s) � treating as cache miss",
+            list(response.keys()),
+        )
+        raise ValueError("Corrupt cache entry: no 'signals' or 'daily' key")
+    return signals_from_cache(response)
 
 
 def _get_today_range():
@@ -515,13 +521,18 @@ def api_outfit():
             return jsonify({"error": f"City not found: {city}"}), 404
         lat, lng = geo["lat"], geo["lng"]
         city     = geo["short_name"]
+    else:
+        # Browser geolocation: reverse-geocode coords to get a real city name
+        if not city:
+            geo = reverse_geocode(float(lat), float(lng))
+            city = geo["short_name"] if geo else ""
 
-    # Fetch forecast for today + 1 day
+    # Fetch forecast for today (single day for the outfit)
     start_date, end_date = _get_today_range()
     start_date_only = start_date
 
     signals = _get_or_create_forecast(
-        city       = city or f"{lat},{lng}",
+        city       = city or f"{round(float(lat), 2)},{round(float(lng), 2)}",
         lat        = float(lat),
         lng        = float(lng),
         start_date = start_date_only,
@@ -538,7 +549,10 @@ def api_outfit():
     outfit["wind_kph"]     = signal.get("wind_kph", 0)
     outfit["humidity_pct"] = signal.get("humidity_pct", 0)
     outfit["temp_min_c"]   = signal.get("temp_min_c", 0)
-    outfit["city_name"]    = city or "Your location"
+    outfit["city_name"]    = city   # real name from geocoder; "" if reverse geocode failed
+
+    # Save last-used city in cookie (set on response)
+    response = make_response(jsonify(outfit))
 
     # Save last-used city in cookie (set on response)
     response = make_response(jsonify(outfit))
@@ -839,3 +853,4 @@ def _parse_legs_from_form(form) -> list[dict]:
         legs[index][field_raw] = value
 
     return [legs[i] for i in sorted(legs.keys())]
+

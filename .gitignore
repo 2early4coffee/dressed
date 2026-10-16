@@ -46,3 +46,5 @@ migrations/versions/__pycache__/
 
 # Logs
 *.log
+fix_routes.py
+fix_encoding.py

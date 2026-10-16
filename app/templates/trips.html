@@ -1,0 +1,548 @@
+{% extends "layout.html" %}
+
+{% block title %}My Trips{% endblock %}
+{% block meta_description %}Your saved travel packing lists.{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* ── Page layout ── */
+    .trips-page {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: var(--sp-8) var(--sp-4) var(--sp-16);
+    }
+
+    .trips-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--sp-4);
+        margin-bottom: var(--sp-8);
+        flex-wrap: wrap;
+    }
+
+    .trips-header h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: -0.025em;
+    }
+
+    /* ── Status filters ── */
+    .trips-filters {
+        display: flex;
+        gap: var(--sp-2);
+        margin-bottom: var(--sp-6);
+        overflow-x: auto;
+        padding-bottom: 2px;
+        scrollbar-width: none;
+    }
+    .trips-filters::-webkit-scrollbar { display: none; }
+
+    .filter-pill {
+        flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: var(--sp-1-5);
+        padding: 0.35rem 0.85rem;
+        border-radius: 999px;
+        border: 1.5px solid var(--border);
+        background: var(--surface);
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+        transition: border-color var(--tx-fast), background var(--tx-fast), color var(--tx-fast);
+    }
+
+    .filter-pill:hover {
+        border-color: var(--green-400);
+        color: var(--text-primary);
+    }
+
+    .filter-pill.active {
+        border-color: var(--green-600);
+        background: var(--green-50);
+        color: var(--green-700);
+    }
+
+    .filter-pill .badge {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 4px;
+        border-radius: 999px;
+        background: var(--green-100);
+        color: var(--green-700);
+        font-size: 0.7rem;
+        font-weight: 700;
+    }
+
+    /* Trip card grid */
+    .trips-grid {
+        display: grid;
+        gap: var(--sp-4);
+    }
+
+    /* Individual trip card */
+    .trip-card {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: var(--sp-3) var(--sp-4);
+        align-items: start;
+        text-decoration: none;
+        color: inherit;
+    }
+
+    .trip-card-main {
+        min-width: 0;
+    }
+
+    .trip-card-title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: var(--sp-1);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .trip-card-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--sp-2) var(--sp-3);
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .trip-card-meta-item {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-1);
+    }
+
+    .trip-card-meta .ti { font-size: 0.95rem; }
+
+    /* Trip progress bar (mini) */
+    .trip-progress {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-2);
+        margin-top: var(--sp-3);
+    }
+
+    .trip-progress-track {
+        flex: 1;
+        height: 5px;
+        background: var(--border);
+        border-radius: 999px;
+        overflow: hidden;
+        max-width: 200px;
+    }
+
+    .trip-progress-fill {
+        height: 100%;
+        background: var(--green-500);
+        border-radius: 999px;
+    }
+
+    .trip-progress-label {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+    }
+
+    /* Trip status badge */
+    .trip-status {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--sp-1);
+        padding: 0.2rem 0.6rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .trip-status-upcoming {
+        background: var(--blue-50, #eff6ff);
+        color: var(--blue-700, #1d4ed8);
+        border: 1px solid var(--blue-200, #bfdbfe);
+    }
+
+    .trip-status-active {
+        background: var(--green-50);
+        color: var(--green-700);
+        border: 1px solid var(--green-200);
+    }
+
+    .trip-status-past {
+        background: var(--surface);
+        color: var(--text-muted);
+        border: 1px solid var(--border);
+    }
+
+    /* Card actions */
+    .trip-card-actions {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-end;
+        gap: var(--sp-2);
+    }
+
+    .trip-card-actions .btn-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 32px;
+        height: 32px;
+        border-radius: var(--r-sm);
+        border: 1px solid var(--border);
+        background: transparent;
+        color: var(--text-muted);
+        cursor: pointer;
+        transition: background var(--tx-fast), color var(--tx-fast);
+        text-decoration: none;
+    }
+
+    .trip-card-actions .btn-icon:hover {
+        background: var(--surface);
+        color: var(--text-primary);
+    }
+
+    .trip-card-actions .btn-icon.danger:hover {
+        background: var(--red-50, #fef2f2);
+        color: var(--red-600, #dc2626);
+        border-color: var(--red-200, #fecaca);
+    }
+
+    /* Legs strip */
+    .trip-legs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--sp-1-5);
+        margin-top: var(--sp-2);
+    }
+
+    .trip-leg-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--sp-1);
+        padding: 0.2rem 0.6rem;
+        border-radius: var(--r-sm);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
+
+    .trip-leg-chip .ti { font-size: 0.85rem; }
+
+    /* Empty state */
+    .trips-empty {
+        text-align: center;
+        padding: var(--sp-16) var(--sp-4);
+        color: var(--text-muted);
+    }
+
+    .trips-empty .empty-icon {
+        font-size: 3rem;
+        display: block;
+        margin-bottom: var(--sp-4);
+        color: var(--border);
+    }
+
+    .trips-empty h2 {
+        font-size: 1.1rem;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: var(--sp-2);
+    }
+
+    .trips-empty p {
+        font-size: 0.9rem;
+        margin-bottom: var(--sp-6);
+    }
+
+    /* Delete confirm modal */
+    .modal-backdrop {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: 200;
+        align-items: center;
+        justify-content: center;
+        padding: var(--sp-4);
+    }
+
+    .modal-backdrop.open { display: flex; }
+
+    .modal-box {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: var(--r-lg);
+        padding: var(--sp-6);
+        max-width: 360px;
+        width: 100%;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.15);
+    }
+
+    .modal-box h3 {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: var(--sp-2);
+    }
+
+    .modal-box p {
+        font-size: 0.875rem;
+        color: var(--text-muted);
+        margin-bottom: var(--sp-5);
+    }
+
+    .modal-actions {
+        display: flex;
+        gap: var(--sp-3);
+        justify-content: flex-end;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="trips-page">
+
+    {# Header #}
+    <div class="trips-header">
+        <h1>My Trips</h1>
+        <a href="{{ url_for('main.trip') }}" class="btn btn-primary">
+            <i class="ti ti-plus" aria-hidden="true"></i>
+            Plan a trip
+        </a>
+    </div>
+
+    {# Status filters #}
+    {% if trips %}
+    {% set n_upcoming = trips | selectattr('status', 'equalto', 'upcoming') | list | length %}
+    {% set n_active   = trips | selectattr('status', 'equalto', 'active')   | list | length %}
+    {% set n_past     = trips | selectattr('status', 'equalto', 'past')     | list | length %}
+
+    <nav class="trips-filters" aria-label="Filter trips">
+        <a href="{{ url_for('main.trips') }}"
+           class="filter-pill {% if not active_filter %}active{% endif %}">
+            All
+            <span class="badge">{{ trips | length }}</span>
+        </a>
+        {% if n_upcoming %}
+        <a href="{{ url_for('main.trips', status='upcoming') }}"
+           class="filter-pill {% if active_filter == 'upcoming' %}active{% endif %}">
+            <i class="ti ti-calendar-event" aria-hidden="true"></i>
+            Upcoming
+            <span class="badge">{{ n_upcoming }}</span>
+        </a>
+        {% endif %}
+        {% if n_active %}
+        <a href="{{ url_for('main.trips', status='active') }}"
+           class="filter-pill {% if active_filter == 'active' %}active{% endif %}">
+            <i class="ti ti-plane" aria-hidden="true"></i>
+            Active
+            <span class="badge">{{ n_active }}</span>
+        </a>
+        {% endif %}
+        {% if n_past %}
+        <a href="{{ url_for('main.trips', status='past') }}"
+           class="filter-pill {% if active_filter == 'past' %}active{% endif %}">
+            <i class="ti ti-history" aria-hidden="true"></i>
+            Past
+            <span class="badge">{{ n_past }}</span>
+        </a>
+        {% endif %}
+    </nav>
+    {% endif %}
+
+    {# Trip list #}
+    {% if trips %}
+    <div class="trips-grid" role="list">
+
+        {% for trip in trips %}
+        {% set packed   = trip.items | selectattr('packed') | list | length %}
+        {% set total    = trip.items | length %}
+        {% set pct      = ((packed / total * 100) | int) if total > 0 else 0 %}
+
+        <div class="card" role="listitem">
+            <div class="trip-card">
+
+                {# Left: main info #}
+                <div class="trip-card-main">
+                    <a href="{{ url_for('main.packing', trip_id=trip.id) }}" class="trip-card-title" style="display:block;text-decoration:none;color:inherit;">
+                        {{ trip.name }}
+                    </a>
+
+                    <div class="trip-card-meta">
+                <span class="trip-card-meta-item">
+                  <i class="ti ti-calendar" aria-hidden="true"></i>
+                  {{ trip.start_date.strftime('%d %b') }}
+                  {%- if trip.end_date and trip.end_date != trip.start_date %}
+                    &ndash;{{ trip.end_date.strftime('%d %b %Y') }}
+                  {%- else %}
+                    {{ trip.start_date.strftime(' %Y') }}
+                  {%- endif %}
+                </span>
+
+                        {% if trip.nights %}
+                        <span class="trip-card-meta-item">
+                    <i class="ti ti-moon" aria-hidden="true"></i>
+                    {{ trip.nights }} night{{ 's' if trip.nights != 1 }}
+                  </span>
+                        {% endif %}
+
+                        <span class="trip-card-meta-item">
+                  {% if trip.bag_type == 'carry_on' %}
+                    <i class="ti ti-backpack" aria-hidden="true"></i> Carry-on
+                  {% elif trip.bag_type == 'backpacking' %}
+                    <i class="ti ti-tent" aria-hidden="true"></i> Backpacking
+                  {% else %}
+                    <i class="ti ti-luggage" aria-hidden="true"></i> Checked bag
+                  {% endif %}
+                </span>
+
+                        {# Status badge #}
+                        <span class="trip-status trip-status-{{ trip.status }}">
+                  {% if trip.status == 'active' %}
+                    <i class="ti ti-plane" aria-hidden="true"></i> Active
+                  {% elif trip.status == 'upcoming' %}
+                    <i class="ti ti-calendar-event" aria-hidden="true"></i> Upcoming
+                  {% else %}
+                    <i class="ti ti-history" aria-hidden="true"></i> Past
+                  {% endif %}
+                </span>
+                    </div>
+
+                    {# Destination chips #}
+                    {% if trip.legs | length > 0 %}
+                    <div class="trip-legs" aria-label="Destinations">
+                        {% for leg in trip.legs %}
+                        <span class="trip-leg-chip">
+                      <i class="ti ti-map-pin" aria-hidden="true"></i>
+                      {{ leg.city or 'Unknown' }}
+                    </span>
+                        {% if not loop.last %}
+                        <span style="color:var(--text-muted); align-self:center;">
+                        <i class="ti ti-arrow-right" style="font-size:0.75rem"></i>
+                      </span>
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    {# Packing progress (mini bar) #}
+                    {% if total > 0 %}
+                    <div class="trip-progress">
+                        <div class="trip-progress-track">
+                            <div class="trip-progress-fill" style="width:{{ pct }}%"></div>
+                        </div>
+                        <span class="trip-progress-label">{{ packed }}/{{ total }} packed</span>
+                    </div>
+                    {% endif %}
+                </div>
+
+                {# Right: action buttons #}
+                <div class="trip-card-actions">
+                    <a href="{{ url_for('main.packing', trip_id=trip.id) }}"
+                       class="btn btn-primary btn-sm"
+                       aria-label="Open packing list for {{ trip.name }}">
+                        <i class="ti ti-checklist" aria-hidden="true"></i> Pack
+                    </a>
+                    <a href="{{ url_for('main.trip_edit', trip_id=trip.id) }}"
+                       class="btn-icon"
+                       title="Edit trip"
+                       aria-label="Edit {{ trip.name }}">
+                        <i class="ti ti-edit" aria-hidden="true"></i>
+                    </a>
+                    <button class="btn-icon danger"
+                            title="Delete trip"
+                            aria-label="Delete {{ trip.name }}"
+                            onclick="confirmDelete({{ trip.id | tojson }}, {{ trip.name | tojson }})">
+                        <i class="ti ti-trash" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+            </div>
+        </div>
+        {% endfor %}
+
+    </div>
+
+    {% else %}
+    {# Empty state #}
+    <div class="card trips-empty">
+        <i class="ti ti-map-off empty-icon" aria-hidden="true"></i>
+        <h2>No trips yet</h2>
+        <p>Plan your first trip and get a personalised packing list based on the weather.</p>
+        <a href="{{ url_for('main.trip') }}" class="btn btn-primary">
+            <i class="ti ti-plus" aria-hidden="true"></i> Plan a trip
+        </a>
+    </div>
+    {% endif %}
+
+</div>
+
+{# Delete confirm modal #}
+<div class="modal-backdrop" id="delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+    <div class="modal-box">
+        <h3 id="delete-modal-title">Delete trip?</h3>
+        <p id="delete-modal-body">This will permanently remove this trip and its packing list.</p>
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+            <form id="delete-form" method="POST" style="display:inline">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-danger">
+                    <i class="ti ti-trash" aria-hidden="true"></i> Delete
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (function () {
+        'use strict';
+
+        const modal     = document.getElementById('delete-modal');
+        const modalBody = document.getElementById('delete-modal-body');
+        const deleteForm = document.getElementById('delete-form');
+
+        function confirmDelete(tripId, tripName) {
+            modalBody.textContent = `"${tripName}" and its packing list will be permanently deleted.`;
+            deleteForm.action = `/trips/${tripId}/delete`;
+            modal.classList.add('open');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeModal() {
+            modal.classList.remove('open');
+            document.body.style.overflow = '';
+        }
+
+        /* Close on backdrop click */
+        modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+        /* Close on Escape */
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Escape' && modal.classList.contains('open')) closeModal();
+        });
+
+        /* Expose for inline onclick */
+        window.confirmDelete = confirmDelete;
+        window.closeModal    = closeModal;
+
+    })();
+</script>
+{% endblock %}

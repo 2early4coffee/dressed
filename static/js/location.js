@@ -1,8 +1,10 @@
 (function () {
     'use strict';
 
-    const cityInput  = document.getElementById('city-input');
-    const locateBtn  = document.getElementById('locate-btn');
+    const cityInput = document.getElementById('city-input');
+    const locateBtn = document.getElementById('locate-btn');
+
+    // Entry point
 
     function init() {
         const prefilledCity = cityInput && cityInput.value.trim();
@@ -20,9 +22,21 @@
             });
         }
 
-        // City input search on blur if value changed
+        // City input - search on Enter or blur if value changed
         if (cityInput) {
             let lastLoaded = cityInput.value.trim();
+
+            cityInput.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const city = cityInput.value.trim();
+                    if (city) {
+                        lastLoaded = city;
+                        loadOutfitForCity(city);
+                    }
+                }
+            });
+
             cityInput.addEventListener('blur', function () {
                 const city = cityInput.value.trim();
                 if (city && city !== lastLoaded) {
@@ -32,6 +46,8 @@
             });
         }
     }
+
+    // Load outfit by city name
 
     async function loadOutfitForCity(city) {
         showWeatherLoading();
@@ -44,8 +60,8 @@
             });
 
             if (cityInput) cityInput.value = data.city_name || city;
-            window.renderOutfit && window.renderOutfit(data);
-            window.loadForecastStrip && window.loadForecastStrip(city);
+            window.renderOutfit      && window.renderOutfit(data);
+            window.loadForecastStrip && window.loadForecastStrip(data.city_name || city);
 
         } catch (err) {
             showWeatherError();
@@ -53,10 +69,17 @@
         }
     }
 
+    // Load outfit by browser geolocation
+
     function locateAndLoad() {
         if (!navigator.geolocation) {
-            // Geolocation not supported it falls back to Nairobi
-            loadOutfitForCity('Nairobi');
+            // No geolocation support - prompt user to type a city
+            showWeatherError();
+            if (cityInput) {
+                cityInput.value       = '';
+                cityInput.placeholder = 'Enter your city to get started';
+                cityInput.focus();
+            }
             return;
         }
 
@@ -65,6 +88,7 @@
         setLocateBtnLoading(true);
 
         navigator.geolocation.getCurrentPosition(
+            // Success
             async function (position) {
                 setLocateBtnLoading(false);
                 const { latitude: lat, longitude: lng } = position.coords;
@@ -79,7 +103,7 @@
                         cityInput.value = data.city_name;
                     }
 
-                    window.renderOutfit && window.renderOutfit(data);
+                    window.renderOutfit      && window.renderOutfit(data);
                     window.loadForecastStrip && window.loadForecastStrip(
                         cityInput ? cityInput.value.trim() : ''
                     );
@@ -89,11 +113,16 @@
                     console.error('Outfit load failed:', err.message);
                 }
             },
+            // Denied / error - do not assume any city
             function (err) {
-                // Geolocation denied or unavailable it falls back to Nairobi
                 setLocateBtnLoading(false);
                 console.warn('Geolocation error:', err.message);
-                loadOutfitForCity(cityInput && cityInput.value.trim() ? cityInput.value.trim() : 'Nairobi');
+                showWeatherError();
+                if (cityInput) {
+                    cityInput.value       = '';
+                    cityInput.placeholder = 'Enter your city to get started';
+                    cityInput.focus();
+                }
             },
             { timeout: 8000, maximumAge: 300000 }
         );

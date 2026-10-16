@@ -1,0 +1,601 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ trip.name }} — Packing List{% endblock %}
+{% block meta_description %}Your personalised packing checklist for {{ trip.name }}.{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Page layout */
+    .packing-page {
+        max-width: 740px;
+        margin: 0 auto;
+        padding: var(--sp-8) var(--sp-4) var(--sp-16);
+    }
+
+    /* Page header */
+    .packing-header {
+        margin-bottom: var(--sp-6);
+    }
+
+    .packing-header h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: -0.025em;
+        margin-bottom: var(--sp-1);
+    }
+
+    .packing-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--sp-3);
+        font-size: 0.875rem;
+        color: var(--text-muted);
+    }
+
+    .packing-meta .ti {
+        font-size: 1rem;
+    }
+
+    .packing-meta-item {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-1);
+    }
+
+    /* Progress bar */
+    .packing-progress {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-3);
+        margin-bottom: var(--sp-6);
+        padding: var(--sp-4);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: var(--r-md);
+    }
+
+    .progress-track {
+        flex: 1;
+        height: 8px;
+        background: var(--border);
+        border-radius: 999px;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        background: var(--green-500);
+        border-radius: 999px;
+        transition: width 0.3s ease;
+    }
+
+    .progress-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        min-width: 5ch;
+        text-align: right;
+    }
+
+    .progress-complete .progress-fill { background: var(--green-600); }
+    .progress-complete .progress-label { color: var(--green-700); }
+
+    /* Category sections */
+    .packing-section {
+        margin-bottom: var(--sp-4);
+    }
+
+    .packing-section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: var(--sp-3);
+        padding-bottom: var(--sp-2);
+        border-bottom: 1px solid var(--border);
+    }
+
+    .packing-section-title {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-2);
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+    }
+
+    .packing-section-title .ti {
+        font-size: 1rem;
+    }
+
+    .section-badge {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-muted);
+    }
+
+    /* Item rows */
+    .packing-item {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--sp-3);
+        padding: var(--sp-3) var(--sp-3);
+        border-radius: var(--r-sm);
+        cursor: pointer;
+        transition: background var(--tx-fast);
+    }
+
+    .packing-item:hover { background: var(--surface); }
+
+    .packing-item input[type="checkbox"] {
+        width: 18px;
+        height: 18px;
+        border: 1.5px solid var(--border);
+        border-radius: 4px;
+        accent-color: var(--green-600);
+        cursor: pointer;
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
+
+    .packing-item-body {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .packing-item-name {
+        font-size: 0.9rem;
+        font-weight: 500;
+        color: var(--text-primary);
+        line-height: 1.4;
+    }
+
+    .packing-item-hint {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        margin-top: 1px;
+    }
+
+    .packing-item-qty {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+        padding-top: 2px;
+    }
+
+    /* Checked state */
+    .packing-item.is-checked .packing-item-name {
+        color: var(--text-muted);
+        text-decoration: line-through;
+        text-decoration-color: var(--text-muted);
+    }
+
+    /* Leg tabs (multi-destination) */
+    .leg-tabs {
+        display: flex;
+        gap: var(--sp-2);
+        margin-bottom: var(--sp-6);
+        overflow-x: auto;
+        padding-bottom: var(--sp-1);
+        scrollbar-width: none;
+    }
+
+    .leg-tabs::-webkit-scrollbar { display: none; }
+
+    .leg-tab {
+        flex-shrink: 0;
+        padding: 0.35rem 0.85rem;
+        border-radius: 999px;
+        border: 1.5px solid var(--border);
+        background: var(--surface);
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        text-decoration: none;
+        transition: border-color var(--tx-fast), background var(--tx-fast), color var(--tx-fast);
+        white-space: nowrap;
+    }
+
+    .leg-tab:hover {
+        border-color: var(--green-400);
+        color: var(--text-primary);
+    }
+
+    .leg-tab.active {
+        border-color: var(--green-600);
+        background: var(--green-50);
+        color: var(--green-700);
+    }
+
+    /* Empty state */
+    .packing-empty {
+        text-align: center;
+        padding: var(--sp-16) var(--sp-4);
+        color: var(--text-muted);
+    }
+
+    .packing-empty .ti {
+        font-size: 2.5rem;
+        display: block;
+        margin-bottom: var(--sp-3);
+        color: var(--border);
+    }
+
+    .packing-empty p {
+        font-size: 0.9rem;
+    }
+
+    /* Action bar */
+    .packing-actions {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--sp-4);
+        flex-wrap: wrap;
+        margin-bottom: var(--sp-6);
+    }
+
+    .packing-actions-right {
+        display: flex;
+        gap: var(--sp-2);
+    }
+
+    /* Weather pill strip */
+    .packing-weather {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--sp-2);
+        margin-bottom: var(--sp-6);
+    }
+
+    .weather-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--sp-1-5);
+        padding: 0.3rem 0.75rem;
+        border-radius: 999px;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+    }
+
+    .weather-pill .ti { font-size: 0.95rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="packing-page">
+
+    {# Page header #}
+    <div class="packing-header">
+        <h1>{{ trip.name }}</h1>
+        <div class="packing-meta">
+
+      <span class="packing-meta-item">
+        <i class="ti ti-calendar" aria-hidden="true"></i>
+        {{ trip.start_date.strftime('%d %b') }}
+        {%- if trip.end_date and trip.end_date != trip.start_date %}
+          &ndash;{{ trip.end_date.strftime('%d %b %Y') }}
+        {%- else %}
+          {{ trip.start_date.strftime(' %Y') }}
+        {%- endif %}
+      </span>
+
+            {% if trip.nights %}
+            <span class="packing-meta-item">
+          <i class="ti ti-moon" aria-hidden="true"></i>
+          {{ trip.nights }} night{{ 's' if trip.nights != 1 }}
+        </span>
+            {% endif %}
+
+            <span class="packing-meta-item">
+        {% if trip.bag_type == 'carry_on' %}
+          <i class="ti ti-backpack" aria-hidden="true"></i> Carry-on only
+        {% elif trip.bag_type == 'backpacking' %}
+          <i class="ti ti-tent" aria-hidden="true"></i> Backpacking
+        {% else %}
+          <i class="ti ti-luggage" aria-hidden="true"></i> Checked bag
+        {% endif %}
+      </span>
+
+            {% if trip.purpose %}
+            <span class="packing-meta-item">
+          <i class="ti ti-tag" aria-hidden="true"></i>
+          {{ trip.purpose | replace('_', ' ') | title }}
+        </span>
+            {% endif %}
+
+            <a href="{{ url_for('main.trip_edit', trip_id=trip.id) }}" class="packing-meta-item" style="color:var(--text-muted);text-decoration:none;">
+                <i class="ti ti-edit" aria-hidden="true"></i> Edit trip
+            </a>
+
+        </div>
+    </div>
+
+    {# Progress bar #}
+    {% set total_items = items | length %}
+    {% set checked_count = items | selectattr('packed') | list | length %}
+    {% set pct = ((checked_count / total_items * 100) | int) if total_items > 0 else 0 %}
+
+    <div class="packing-progress {% if pct == 100 %}progress-complete{% endif %}" id="progress-bar-wrap">
+        <div class="progress-track">
+            <div class="progress-fill" id="progress-fill" style="width: {{ pct }}%"></div>
+        </div>
+        <span class="progress-label" id="progress-label">{{ checked_count }}/{{ total_items }}</span>
+    </div>
+
+    {# Weather summary pills (per active leg) #}
+    {% if weather_summaries %}
+    <div class="packing-weather" aria-label="Weather summary">
+        {% for leg in weather_summaries %}
+        <span class="weather-pill">
+          <i class="ti ti-map-pin" aria-hidden="true"></i>
+          {{ leg.city }}
+        </span>
+        {% if leg.temp_min_c is not none and leg.temp_max_c is not none %}
+        <span class="weather-pill">
+            <i class="ti ti-thermometer" aria-hidden="true"></i>
+            {{ leg.temp_min_c | round(0) | int }}&ndash;{{ leg.temp_max_c | round(0) | int }}&deg;C
+          </span>
+        {% endif %}
+        {% if leg.rain_days %}
+        <span class="weather-pill">
+            <i class="ti ti-cloud-rain" aria-hidden="true"></i>
+            Rain on {{ leg.rain_days }} day{{ 's' if leg.rain_days != 1 }}
+          </span>
+        {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# Leg tabs (multi-destination) #}
+    {% if legs | length > 1 %}
+    <div class="leg-tabs" role="tablist" aria-label="Trip legs">
+        <a href="{{ url_for('main.packing', trip_id=trip.id) }}"
+           class="leg-tab {% if not active_leg %}active{% endif %}"
+           role="tab">
+            All
+        </a>
+        {% for leg in legs %}
+        <a href="{{ url_for('main.packing', trip_id=trip.id, leg=loop.index0) }}"
+           class="leg-tab {% if active_leg == loop.index0 %}active{% endif %}"
+           role="tab">
+            {{ leg.city or ('Leg ' ~ loop.index) }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# Action buttons #}
+    <div class="packing-actions">
+    <span id="packed-summary" style="font-size:0.875rem; color:var(--text-muted)">
+      {% if pct == 100 %}
+        <i class="ti ti-circle-check" style="color:var(--green-600)"></i> All packed!
+      {% elif checked_count == 0 %}
+        Start ticking off items as you pack.
+      {% else %}
+        {{ total_items - checked_count }} item{{ 's' if (total_items - checked_count) != 1 }} left to pack.
+      {% endif %}
+    </span>
+
+        <div class="packing-actions-right">
+            <button class="btn btn-ghost btn-sm" id="btn-uncheck-all" type="button" aria-label="Uncheck all items">
+                <i class="ti ti-square" aria-hidden="true"></i> Reset
+            </button>
+            <button class="btn btn-ghost btn-sm" id="btn-check-all" type="button" aria-label="Check all items">
+                <i class="ti ti-checks" aria-hidden="true"></i> Check all
+            </button>
+        </div>
+    </div>
+
+    {# Packing sections #}
+    {% if items %}
+
+    {% set categories = items | map(attribute='category') | unique | list %}
+
+    {% for category in categories %}
+    {% set cat_items = items | selectattr('category', 'equalto', category) | list %}
+    {% if cat_items %}
+
+    <div class="card packing-section" data-category="{{ category }}">
+        <div class="packing-section-header">
+            <span class="packing-section-title">
+              {% if category == 'clothing' %}
+                <i class="ti ti-shirt" aria-hidden="true"></i> Clothing
+              {% elif category == 'footwear' %}
+                <i class="ti ti-shoe" aria-hidden="true"></i> Footwear
+              {% elif category == 'toiletries' %}
+                <i class="ti ti-droplet" aria-hidden="true"></i> Toiletries
+              {% elif category == 'documents' %}
+                <i class="ti ti-file-text" aria-hidden="true"></i> Documents
+              {% elif category == 'electronics' %}
+                <i class="ti ti-device-mobile" aria-hidden="true"></i> Electronics
+              {% elif category == 'health' %}
+                <i class="ti ti-first-aid-kit" aria-hidden="true"></i> Health &amp; meds
+              {% elif category == 'activities' %}
+                <i class="ti ti-run" aria-hidden="true"></i> Activities
+              {% elif category == 'money' %}
+                <i class="ti ti-wallet" aria-hidden="true"></i> Money &amp; cards
+              {% else %}
+                <i class="ti ti-package" aria-hidden="true"></i>
+                {{ category | replace('_', ' ') | title }}
+              {% endif %}
+            </span>
+            <span class="section-badge">
+              <span class="section-checked">{{ cat_items | selectattr('packed') | list | length }}</span>/<span>{{ cat_items | length }}</span>
+            </span>
+        </div>
+
+        {% for item in cat_items %}
+        <div class="packing-item {% if item.packed %}is-checked{% endif %}"
+             data-item-id="{{ item.id }}"
+             onclick="toggleItem(this)">
+            <input
+                    type="checkbox"
+                    id="item-{{ item.id }}"
+                    name="item-{{ item.id }}"
+                    {% if item.packed %}checked{% endif %}
+                    aria-label="{{ item.name }}"
+                    onclick="event.stopPropagation()"
+                    onchange="toggleItem(this.closest('.packing-item'))"
+            >
+            <div class="packing-item-body">
+                <div class="packing-item-name">{{ item.name }}</div>
+                {% if item.notes %}
+                <div class="packing-item-hint">{{ item.notes }}</div>
+                {% endif %}
+            </div>
+            {% if item.quantity and item.quantity > 1 %}
+            <span class="packing-item-qty">× {{ item.quantity }}</span>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+    </div>
+
+    {% endif %}
+    {% endfor %}
+
+    {% else %}
+    <div class="card packing-empty">
+        <i class="ti ti-package-off"></i>
+        <p>No packing items generated yet.</p>
+        <a href="{{ url_for('main.trip_edit', trip_id=trip.id) }}" class="btn btn-primary" style="margin-top:var(--sp-4)">
+            <i class="ti ti-edit" aria-hidden="true"></i> Edit trip details
+        </a>
+    </div>
+    {% endif %}
+
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (function () {
+        'use strict';
+
+        /* State */
+        const TRIP_ID = {{ trip.id | tojson }};
+        const TOGGLE_URL = '/api/packing/toggle';
+        let pending = new Set();          // item IDs being saved
+
+        /* DOM refs */
+        const progressFill  = document.getElementById('progress-fill');
+        const progressLabel = document.getElementById('progress-label');
+        const packedSummary = document.getElementById('packed-summary');
+        const btnCheckAll   = document.getElementById('btn-check-all');
+        const btnUncheckAll = document.getElementById('btn-uncheck-all');
+
+        /* Count helpers */
+        function allItems()     { return [...document.querySelectorAll('.packing-item')]; }
+        function checkedItems() { return allItems().filter(el => el.classList.contains('is-checked')); }
+
+        function updateProgress() {
+            const total   = allItems().length;
+            const checked = checkedItems().length;
+            const pct     = total > 0 ? Math.round(checked / total * 100) : 0;
+
+            progressFill.style.width = pct + '%';
+            progressLabel.textContent = checked + '/' + total;
+
+            const wrap = document.getElementById('progress-bar-wrap');
+            if (pct === 100) {
+                wrap.classList.add('progress-complete');
+            } else {
+                wrap.classList.remove('progress-complete');
+            }
+
+            const left = total - checked;
+            if (pct === 100) {
+                packedSummary.innerHTML = '<i class="ti ti-circle-check" style="color:var(--green-600)"></i> All packed!';
+            } else if (checked === 0) {
+                packedSummary.textContent = 'Start ticking off items as you pack.';
+            } else {
+                packedSummary.textContent = left + ' item' + (left !== 1 ? 's' : '') + ' left to pack.';
+            }
+
+            /* Per-section badge */
+            document.querySelectorAll('.packing-section').forEach(section => {
+                const sItems   = [...section.querySelectorAll('.packing-item')];
+                const sChecked = sItems.filter(el => el.classList.contains('is-checked')).length;
+                const badge    = section.querySelector('.section-checked');
+                if (badge) badge.textContent = sChecked;
+            });
+        }
+
+        /* Toggle single item */
+        function toggleItem(row) {
+            const itemId  = row.dataset.itemId;
+            const checked = row.classList.contains('is-checked');
+            const nowPacked = !checked;
+
+            /* Optimistic UI */
+            row.classList.toggle('is-checked', nowPacked);
+            const cb = row.querySelector('input[type="checkbox"]');
+            if (cb) cb.checked = nowPacked;
+            updateProgress();
+
+            /* Debounce */
+            if (pending.has(itemId)) return;
+            pending.add(itemId);
+
+            fetch(TOGGLE_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+                body: JSON.stringify({ trip_id: TRIP_ID, item_id: itemId, packed: nowPacked }),
+            })
+                .then(r => {
+                    if (!r.ok) throw new Error('Network response not ok');
+                })
+                .catch(() => {
+                    /* Revert on error */
+                    row.classList.toggle('is-checked', checked);
+                    if (cb) cb.checked = checked;
+                    updateProgress();
+                })
+                .finally(() => pending.delete(itemId));
+        }
+
+        /* Expose globally for inline onclick */
+        window.toggleItem = toggleItem;
+
+        /* Check / uncheck all */
+        function setAllItems(packed) {
+            const items = allItems();
+            const itemIds = items.map(el => el.dataset.itemId);
+
+            items.forEach(row => {
+                row.classList.toggle('is-checked', packed);
+                const cb = row.querySelector('input[type="checkbox"]');
+                if (cb) cb.checked = packed;
+            });
+            updateProgress();
+
+            fetch(TOGGLE_URL + '/bulk', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+                body: JSON.stringify({ trip_id: TRIP_ID, item_ids: itemIds, packed }),
+            }).catch(() => {
+                /* On error, reload to reflect true state */
+                window.location.reload();
+            });
+        }
+
+        if (btnCheckAll)   btnCheckAll.addEventListener('click',   () => setAllItems(true));
+        if (btnUncheckAll) btnUncheckAll.addEventListener('click', () => setAllItems(false));
+
+        /* CSRF helper */
+        function getCsrf() {
+            const meta = document.querySelector('meta[name="csrf-token"]');
+            return meta ? meta.content : '';
+        }
+
+    })();
+</script>
+{% endblock %}

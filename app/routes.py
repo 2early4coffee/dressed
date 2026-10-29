@@ -458,6 +458,27 @@ def trips_list():
     return render_template("trips.html", trips=trips, user=g.user)
 
 
+@main.route("/trips/<int:trip_id>/delete", methods=["POST"])
+def trip_delete(trip_id: int):
+    trip = Trip.query.filter_by(id=trip_id, deleted_at=None).first_or_404()
+
+    if not packing_ops.verify_trip_owner(trip_id, g.user_id, g.session_token):
+        abort(403)
+
+    # Soft delete - keeps data for analytics, just hides from the user
+    trip.deleted_at = datetime.now(timezone.utc)
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.error("Failed to delete trip %s: %s", trip_id, e)
+        # Redirect back to trips list; flash not set up so just redirect
+        return redirect(url_for("main.trips_list"))
+
+    return redirect(url_for("main.trips_list"))
+
+
 @main.route("/profile", methods=["GET"])
 def profile():
     return render_template("profile.html", profile=g.profile_dict, user=g.user)
@@ -854,6 +875,62 @@ def api_feedback():
         return jsonify({"error": "Could not save feedback."}), 500
 
     return jsonify({"ok": True})
+
+# Error handlers
+
+def _err(code, title, message, icon, show_back=True):
+    return render_template(
+        "error.html",
+        code      = code,
+        title     = title,
+        message   = message,
+        icon      = icon,
+        show_back = show_back,
+    ), code
+
+
+@main.app_errorhandler(400)
+def err_400(e):
+    return _err(400, "Bad Request",
+                "Something about that request didn't look right. Check your input and try again.",
+                "ti-alert-circle")
+
+
+@main.app_errorhandler(403)
+def err_403(e):
+    return _err(403, "Access Denied",
+                "You don't have permission to view this page. If you think this is a mistake, try signing in.",
+                "ti-lock", show_back=False)
+
+
+@main.app_errorhandler(404)
+def err_404(e):
+    return _err(404, "Page Not Found",
+                "We couldn't find what you were looking for. It may have been moved or deleted.",
+                "ti-map-off")
+
+
+@main.app_errorhandler(429)
+def err_429(e):
+    return _err(429, "Slow Down",
+                "You've made too many requests in a short time. Wait a moment and try again.",
+                "ti-clock-pause", show_back=False)
+
+
+@main.app_errorhandler(500)
+def err_500(e):
+    logger.error("500 error: %s", e)
+    return _err(500, "Something Went Wrong",
+                "An unexpected error occurred on our end. Try again in a moment -- if it keeps happening, the team is on it.",
+                "ti-cloud-off", show_back=False)
+
+
+@main.app_errorhandler(503)
+def err_503(e):
+    return _err(503, "Service Unavailable",
+                "We couldn't reach one of the services we depend on (weather data or geocoding). Try again in a moment.",
+                "ti-wifi-off", show_back=False)
+
 
 # Form parsing helper
 def _parse_legs_from_form(form) -> list[dict]:

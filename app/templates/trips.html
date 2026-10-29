@@ -81,13 +81,13 @@
         font-weight: 700;
     }
 
-    /* Trip card grid */
+    /* ── Trip card grid ── */
     .trips-grid {
         display: grid;
         gap: var(--sp-4);
     }
 
-    /* Individual trip card */
+    /* ── Individual trip card ── */
     .trip-card {
         display: grid;
         grid-template-columns: 1fr auto;
@@ -128,7 +128,7 @@
 
     .trip-card-meta .ti { font-size: 0.95rem; }
 
-    /* Trip progress bar (mini) */
+    /* ── Trip progress bar (mini) ── */
     .trip-progress {
         display: flex;
         align-items: center;
@@ -157,7 +157,7 @@
         white-space: nowrap;
     }
 
-    /* Trip status badge */
+    /* ── Trip status badge ── */
     .trip-status {
         display: inline-flex;
         align-items: center;
@@ -187,7 +187,7 @@
         border: 1px solid var(--border);
     }
 
-    /* Card actions */
+    /* ── Card actions ── */
     .trip-card-actions {
         display: flex;
         flex-direction: column;
@@ -221,7 +221,7 @@
         border-color: var(--red-200, #fecaca);
     }
 
-    /* Legs strip */
+    /* ── Legs strip ── */
     .trip-legs {
         display: flex;
         flex-wrap: wrap;
@@ -243,7 +243,7 @@
 
     .trip-leg-chip .ti { font-size: 0.85rem; }
 
-    /* Empty state */
+    /* ── Empty state ── */
     .trips-empty {
         text-align: center;
         padding: var(--sp-16) var(--sp-4);
@@ -269,7 +269,7 @@
         margin-bottom: var(--sp-6);
     }
 
-    /* Delete confirm modal */
+    /* ── Delete confirm modal ── */
     .modal-backdrop {
         display: none;
         position: fixed;
@@ -317,7 +317,7 @@
 {% block content %}
 <div class="trips-page">
 
-    {# Header #}
+    {# ── Header ── #}
     <div class="trips-header">
         <h1>My Trips</h1>
         <a href="{{ url_for('main.trip') }}" class="btn btn-primary">
@@ -326,78 +326,39 @@
         </a>
     </div>
 
-    {# Status filters #}
+    {# ── Trip count ── #}
     {% if trips %}
-    {% set n_upcoming = trips | selectattr('status', 'equalto', 'upcoming') | list | length %}
-    {% set n_active   = trips | selectattr('status', 'equalto', 'active')   | list | length %}
-    {% set n_past     = trips | selectattr('status', 'equalto', 'past')     | list | length %}
-
-    <nav class="trips-filters" aria-label="Filter trips">
-        <a href="{{ url_for('main.trips') }}"
-           class="filter-pill {% if not active_filter %}active{% endif %}">
-            All
-            <span class="badge">{{ trips | length }}</span>
-        </a>
-        {% if n_upcoming %}
-        <a href="{{ url_for('main.trips', status='upcoming') }}"
-           class="filter-pill {% if active_filter == 'upcoming' %}active{% endif %}">
-            <i class="ti ti-calendar-event" aria-hidden="true"></i>
-            Upcoming
-            <span class="badge">{{ n_upcoming }}</span>
-        </a>
-        {% endif %}
-        {% if n_active %}
-        <a href="{{ url_for('main.trips', status='active') }}"
-           class="filter-pill {% if active_filter == 'active' %}active{% endif %}">
-            <i class="ti ti-plane" aria-hidden="true"></i>
-            Active
-            <span class="badge">{{ n_active }}</span>
-        </a>
-        {% endif %}
-        {% if n_past %}
-        <a href="{{ url_for('main.trips', status='past') }}"
-           class="filter-pill {% if active_filter == 'past' %}active{% endif %}">
-            <i class="ti ti-history" aria-hidden="true"></i>
-            Past
-            <span class="badge">{{ n_past }}</span>
-        </a>
-        {% endif %}
-    </nav>
+    <p style="font-size:0.875rem; color:var(--text-muted); margin-bottom:var(--sp-4);">
+        {{ trips | length }} trip{{ 's' if trips | length != 1 }}
+    </p>
     {% endif %}
 
-    {# Trip list #}
+    {# ── Trip list ── #}
     {% if trips %}
     <div class="trips-grid" role="list">
 
         {% for trip in trips %}
-        {% set packed   = trip.items | selectattr('packed') | list | length %}
-        {% set total    = trip.items | length %}
-        {% set pct      = ((packed / total * 100) | int) if total > 0 else 0 %}
+        {# Compute dates from legs if trip has no direct start_date #}
+        {% set first_leg = trip.legs[0] if trip.legs else none %}
+        {% set last_leg  = trip.legs[-1] if trip.legs else none %}
 
         <div class="card" role="listitem">
             <div class="trip-card">
 
                 {# Left: main info #}
                 <div class="trip-card-main">
-                    <a href="{{ url_for('main.packing', trip_id=trip.id) }}" class="trip-card-title" style="display:block;text-decoration:none;color:inherit;">
+                    <a href="{{ url_for('main.packing_view', trip_id=trip.id) }}" class="trip-card-title" style="display:block;text-decoration:none;color:inherit;">
                         {{ trip.name }}
                     </a>
 
                     <div class="trip-card-meta">
-                <span class="trip-card-meta-item">
-                  <i class="ti ti-calendar" aria-hidden="true"></i>
-                  {{ trip.start_date.strftime('%d %b') }}
-                  {%- if trip.end_date and trip.end_date != trip.start_date %}
-                    &ndash;{{ trip.end_date.strftime('%d %b %Y') }}
-                  {%- else %}
-                    {{ trip.start_date.strftime(' %Y') }}
-                  {%- endif %}
-                </span>
-
-                        {% if trip.nights %}
+                        {% if first_leg %}
                         <span class="trip-card-meta-item">
-                    <i class="ti ti-moon" aria-hidden="true"></i>
-                    {{ trip.nights }} night{{ 's' if trip.nights != 1 }}
+                    <i class="ti ti-calendar" aria-hidden="true"></i>
+                    {{ first_leg.start_date }}
+                    {%- if last_leg and last_leg.end_date != first_leg.start_date %}
+                      &ndash;{{ last_leg.end_date }}
+                    {%- endif %}
                   </span>
                         {% endif %}
 
@@ -411,16 +372,12 @@
                   {% endif %}
                 </span>
 
-                        {# Status badge #}
-                        <span class="trip-status trip-status-{{ trip.status }}">
-                  {% if trip.status == 'active' %}
-                    <i class="ti ti-plane" aria-hidden="true"></i> Active
-                  {% elif trip.status == 'upcoming' %}
-                    <i class="ti ti-calendar-event" aria-hidden="true"></i> Upcoming
-                  {% else %}
-                    <i class="ti ti-history" aria-hidden="true"></i> Past
-                  {% endif %}
-                </span>
+                        {% if trip.purpose %}
+                        <span class="trip-card-meta-item">
+                    <i class="ti ti-tag" aria-hidden="true"></i>
+                    {{ trip.purpose | replace('_', ' ') | title }}
+                  </span>
+                        {% endif %}
                     </div>
 
                     {# Destination chips #}
@@ -439,26 +396,16 @@
                         {% endfor %}
                     </div>
                     {% endif %}
-
-                    {# Packing progress (mini bar) #}
-                    {% if total > 0 %}
-                    <div class="trip-progress">
-                        <div class="trip-progress-track">
-                            <div class="trip-progress-fill" style="width:{{ pct }}%"></div>
-                        </div>
-                        <span class="trip-progress-label">{{ packed }}/{{ total }} packed</span>
-                    </div>
-                    {% endif %}
                 </div>
 
                 {# Right: action buttons #}
                 <div class="trip-card-actions">
-                    <a href="{{ url_for('main.packing', trip_id=trip.id) }}"
+                    <a href="{{ url_for('main.packing_view', trip_id=trip.id) }}"
                        class="btn btn-primary btn-sm"
                        aria-label="Open packing list for {{ trip.name }}">
                         <i class="ti ti-checklist" aria-hidden="true"></i> Pack
                     </a>
-                    <a href="{{ url_for('main.trip_edit', trip_id=trip.id) }}"
+                    <a href="{{ url_for('main.trip') }}?trip_id={{ trip.id }}"
                        class="btn-icon"
                        title="Edit trip"
                        aria-label="Edit {{ trip.name }}">
@@ -479,7 +426,7 @@
     </div>
 
     {% else %}
-    {# Empty state #}
+    {# ── Empty state ── #}
     <div class="card trips-empty">
         <i class="ti ti-map-off empty-icon" aria-hidden="true"></i>
         <h2>No trips yet</h2>
@@ -492,7 +439,7 @@
 
 </div>
 
-{# Delete confirm modal #}
+{# ── Delete confirm modal ── #}
 <div class="modal-backdrop" id="delete-modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
     <div class="modal-box">
         <h3 id="delete-modal-title">Delete trip?</h3>

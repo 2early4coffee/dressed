@@ -1,0 +1,1054 @@
+{% extends "layout.html" %}
+
+{% block title %}{{ 'Edit Trip' if saved_trip else 'Plan a Trip' }}{% endblock %}
+{% block meta_description %}Plan your trip and get a personalised packing list based on the weather at each destination.{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* Page layout */
+    .trip-page {
+        max-width: 680px;
+        margin: 0 auto;
+        padding: var(--sp-8) var(--sp-4) var(--sp-16);
+    }
+
+    .trip-header {
+        margin-bottom: var(--sp-8);
+    }
+
+    .trip-header h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: -0.025em;
+        margin-bottom: var(--sp-1);
+    }
+
+    .trip-header p {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+    }
+
+    /* Sections */
+    .trip-section {
+        margin-bottom: var(--sp-5);
+    }
+
+    .section-title {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        margin-bottom: var(--sp-3);
+        padding-bottom: var(--sp-2);
+        border-bottom: 1px solid var(--border);
+    }
+
+    /* Form fields */
+    .field {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sp-1-5);
+    }
+
+    .field + .field {
+        margin-top: var(--sp-4);
+    }
+
+    .field-label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .field-hint {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        margin-top: calc(-1 * var(--sp-1));
+    }
+
+    .field input[type="text"],
+    .field input[type="date"],
+    .field select {
+        width: 100%;
+        padding: 0.55rem 0.75rem;
+        border-radius: var(--r-md);
+        border: 1.5px solid var(--border);
+        background: var(--surface);
+        color: var(--text-primary);
+        font-size: 0.9rem;
+        transition: border-color var(--tx-fast);
+        box-sizing: border-box;
+    }
+
+    .field input:focus,
+    .field select:focus {
+        outline: none;
+        border-color: var(--green-500);
+    }
+
+    /* Pill groups */
+    .pill-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--sp-2);
+    }
+
+    .pill-group input[type="radio"],
+    .pill-group input[type="checkbox"] {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .pill-group label {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--sp-1-5);
+        padding: 0.4rem 0.9rem;
+        border-radius: 999px;
+        border: 1.5px solid var(--border);
+        background: var(--surface);
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: border-color var(--tx-fast), background var(--tx-fast), color var(--tx-fast);
+        user-select: none;
+    }
+
+    .pill-group label:hover {
+        border-color: var(--green-400);
+        color: var(--text-primary);
+    }
+
+    .pill-group input:checked + label {
+        border-color: var(--green-600);
+        background: var(--green-50);
+        color: var(--green-700);
+    }
+
+    .pill-group input:focus-visible + label {
+        outline: 2px solid var(--green-400);
+        outline-offset: 2px;
+    }
+
+    /* City autocomplete */
+    .city-wrap {
+        position: relative;
+        z-index: 10;
+    }
+
+    .city-suggestions {
+        position: absolute;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        background: #ffffff;
+        border: 1.5px solid var(--green-400);
+        border-radius: var(--r-md);
+        box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+        z-index: 9999;
+        max-height: 220px;
+        overflow-y: auto;
+        display: none;
+    }
+
+    .city-suggestions.open { display: block; }
+
+    .city-suggestion {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-2);
+        padding: 0.5rem 0.75rem;
+        font-size: 0.875rem;
+        color: var(--text-primary);
+        cursor: pointer;
+        transition: background var(--tx-fast);
+    }
+
+    .city-suggestion:hover,
+    .city-suggestion.focused {
+        background: var(--green-50);
+        color: var(--green-700);
+    }
+
+    .city-suggestion .city-name { font-weight: 600; }
+    .city-suggestion .city-country { color: var(--text-muted); font-size: 0.8rem; }
+
+    /* Date error */
+    .date-error.show { display: block; }
+
+    input.date-invalid {
+        border-color: var(--red-400, #f87171) !important;
+    }
+
+    .leg-dates .field:last-child {
+        position: relative;
+    }
+
+    /* Legs */
+    .legs-list {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sp-3);
+    }
+
+    .leg-card {
+        border: 1.5px solid var(--border);
+        border-radius: var(--r-md);
+        padding: var(--sp-4);
+        background: var(--surface);
+        position: relative;
+        overflow: visible;
+    }
+
+    .leg-card-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: var(--sp-3);
+    }
+
+    .leg-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    .leg-remove {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 28px;
+        height: 28px;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        border-radius: var(--r-sm);
+        cursor: pointer;
+        transition: background var(--tx-fast), color var(--tx-fast);
+    }
+
+    .leg-remove:hover {
+        background: var(--red-50, #fef2f2);
+        color: var(--red-600, #dc2626);
+    }
+
+    .leg-dates {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: var(--sp-3);
+        align-items: end;
+    }
+
+    .leg-dates .field {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sp-1-5);
+    }
+
+    .leg-dates .field-label {
+        height: 1.25rem;
+        display: flex;
+        align-items: center;
+    }
+
+    /* Keep error span out of the flow so it doesn't push the input up */
+    .date-error {
+        position: absolute;
+        font-size: 0.78rem;
+        color: var(--red-600, #dc2626);
+        margin-top: var(--sp-1);
+        display: none;
+    }
+
+    .leg-city {
+        margin-bottom: var(--sp-3);
+    }
+
+    .add-leg-btn {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--sp-1-5);
+        padding: 0.45rem 1rem;
+        border-radius: var(--r-md);
+        border: 1.5px dashed var(--border);
+        background: transparent;
+        color: var(--text-muted);
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        width: 100%;
+        justify-content: center;
+        transition: border-color var(--tx-fast), color var(--tx-fast);
+        margin-top: var(--sp-2);
+    }
+
+    .add-leg-btn:hover {
+        border-color: var(--green-400);
+        color: var(--green-700);
+    }
+
+    /* Activity chips */
+    .activity-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+        gap: var(--sp-2);
+    }
+
+    .activity-chip {
+        position: relative;
+    }
+
+    .activity-chip input[type="checkbox"] {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .activity-chip label {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-2);
+        padding: var(--sp-3);
+        border-radius: var(--r-md);
+        border: 1.5px solid var(--border);
+        background: var(--surface);
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: border-color var(--tx-fast), background var(--tx-fast), color var(--tx-fast);
+        user-select: none;
+    }
+
+    .activity-chip label:hover {
+        border-color: var(--green-400);
+        color: var(--text-primary);
+    }
+
+    .activity-chip input:checked + label {
+        border-color: var(--green-600);
+        background: var(--green-50);
+        color: var(--green-700);
+    }
+
+    /* Submit bar */
+    .submit-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--sp-4);
+        padding-top: var(--sp-6);
+        border-top: 1px solid var(--border);
+        margin-top: var(--sp-6);
+        flex-wrap: wrap;
+    }
+
+    .submit-note {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: var(--sp-1-5);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="trip-page">
+
+    <div class="trip-header">
+        <h1>{{ 'Edit trip' if saved_trip else 'Plan a trip' }}</h1>
+        <p>Add your destinations and dates, we'll build a packing list based on the forecast.</p>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-error" role="alert" style="margin-bottom:var(--sp-5)">
+        <i class="ti ti-alert-circle" aria-hidden="true"></i>
+        <span>{{ error }}</span>
+    </div>
+    {% endif %}
+
+    <form
+            action="{{ url_for('main.trip_create') }}"
+            method="POST"
+            id="trip-form"
+            aria-label="Trip planner"
+            novalidate
+    >
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        {# Trip name #}
+        <div class="card trip-section">
+            <p class="section-title">Trip name</p>
+            <div class="field">
+                <label class="field-label" for="trip-name">Give this trip a name</label>
+                <input
+                        type="text"
+                        id="trip-name"
+                        name="name"
+                        placeholder="e.g. Tokyo Summer, Paris Work Trip"
+                        maxlength="200"
+                        value="{{ saved_trip.name if saved_trip else '' }}"
+                        autocomplete="off"
+                >
+            </div>
+        </div>
+
+        {# Destinations #}
+        <div class="card trip-section">
+            <p class="section-title">Destinations</p>
+            <p class="field-hint" style="margin-bottom:var(--sp-4)">
+                Add one leg per city. Multi-city trips get per-destination packing recommendations.
+            </p>
+
+            <div class="legs-list" id="legs-list">
+                {% if saved_trip and saved_trip.legs %}
+                {% for leg in saved_trip.legs %}
+                <div class="leg-card" data-leg="{{ loop.index0 }}">
+                    <div class="leg-card-header">
+                        <span class="leg-label">Destination {{ loop.index }}</span>
+                        {% if not loop.first %}
+                        <button type="button" class="leg-remove" onclick="removeLeg(this)" aria-label="Remove destination">
+                            <i class="ti ti-x" aria-hidden="true"></i>
+                        </button>
+                        {% endif %}
+                    </div>
+                    <div class="leg-city field">
+                        <label class="field-label" for="leg-city-{{ loop.index0 }}">City</label>
+                        <div class="city-wrap">
+                            <input
+                                    type="text"
+                                    id="leg-city-{{ loop.index0 }}"
+                                    name="legs[{{ loop.index0 }}][city]"
+                                    placeholder="e.g. Tokyo, Japan"
+                                    value="{{ leg.city }}{% if leg.country %}, {{ leg.country }}{% endif %}"
+                                    required
+                                    autocomplete="off"
+                                    class="city-input"
+                                    data-leg="{{ loop.index0 }}"
+                            >
+                            <div class="city-suggestions" id="sugg-{{ loop.index0 }}" role="listbox"></div>
+                        </div>
+                    </div>
+                    <div class="leg-dates">
+                        <div class="field">
+                            <label class="field-label" for="leg-start-{{ loop.index0 }}">From</label>
+                            <input
+                                    type="date"
+                                    id="leg-start-{{ loop.index0 }}"
+                                    name="legs[{{ loop.index0 }}][start]"
+                                    value="{{ leg.start_date }}"
+                                    required
+                                    class="date-start"
+                                    data-leg="{{ loop.index0 }}"
+                            >
+                        </div>
+                        <div class="field">
+                            <label class="field-label" for="leg-end-{{ loop.index0 }}">To</label>
+                            <input
+                                    type="date"
+                                    id="leg-end-{{ loop.index0 }}"
+                                    name="legs[{{ loop.index0 }}][end]"
+                                    value="{{ leg.end_date }}"
+                                    required
+                                    class="date-end"
+                                    data-leg="{{ loop.index0 }}"
+                            >
+                            <span class="date-error" id="date-err-{{ loop.index0 }}"></span>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                {# Default: one blank leg #}
+                <div class="leg-card" data-leg="0">
+                    <div class="leg-card-header">
+                        <span class="leg-label">Destination 1</span>
+                    </div>
+                    <div class="leg-city field">
+                        <label class="field-label" for="leg-city-0">City</label>
+                        <div class="city-wrap">
+                            <input
+                                    type="text"
+                                    id="leg-city-0"
+                                    name="legs[0][city]"
+                                    placeholder="e.g. Tokyo, Japan"
+                                    required
+                                    autocomplete="off"
+                                    class="city-input"
+                                    data-leg="0"
+                            >
+                            <div class="city-suggestions" id="sugg-0" role="listbox"></div>
+                        </div>
+                    </div>
+                    <div class="leg-dates">
+                        <div class="field">
+                            <label class="field-label" for="leg-start-0">From</label>
+                            <input type="date" id="leg-start-0" name="legs[0][start]" required class="date-start" data-leg="0">
+                        </div>
+                        <div class="field">
+                            <label class="field-label" for="leg-end-0">To</label>
+                            <input type="date" id="leg-end-0" name="legs[0][end]" required class="date-end" data-leg="0">
+                            <span class="date-error" id="date-err-0"></span>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <button type="button" class="add-leg-btn" id="add-leg-btn">
+                <i class="ti ti-plus" aria-hidden="true"></i> Add another destination
+            </button>
+        </div>
+
+        {# Trip type #}
+        <div class="card trip-section">
+            <p class="section-title">Trip type</p>
+
+            <div class="field">
+                <span class="field-label" id="purpose-label">Purpose</span>
+                <div class="pill-group" role="radiogroup" aria-labelledby="purpose-label">
+                    {% set purposes = [
+                    ('leisure',  'ti-umbrella-beach', 'Leisure'),
+                    ('business', 'ti-briefcase',      'Business'),
+                    ('wedding',  'ti-heart',          'Wedding'),
+                    ('sports',   'ti-trophy',         'Sports'),
+                    ('adventure','ti-mountain',       'Adventure'),
+                    ] %}
+                    {% for val, icon, label in purposes %}
+                    <input type="radio" name="purpose" id="purpose-{{ val }}" value="{{ val }}"
+                           {% if (saved_trip and saved_trip.purpose == val) or (not saved_trip and profile.purpose == val) or (not saved_trip and not profile.purpose and val == 'leisure') %}checked{% endif %}>
+                    <label for="purpose-{{ val }}">
+                        <i class="ti {{ icon }}" aria-hidden="true"></i> {{ label }}
+                    </label>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="field" style="margin-top:var(--sp-5)">
+                <span class="field-label" id="tripmode-label">Packing mode</span>
+                <div class="pill-group" role="radiogroup" aria-labelledby="tripmode-label">
+                    {% set default_mode = saved_trip.trip_mode if saved_trip else (profile.default_trip_mode or 'regular') %}
+                    <input type="radio" name="trip_mode" id="tm-regular" value="regular"
+                           {% if default_mode == 'regular' %}checked{% endif %}>
+                    <label for="tm-regular">
+                        <i class="ti ti-luggage" aria-hidden="true"></i> Checked bag
+                    </label>
+                    <input type="radio" name="trip_mode" id="tm-carryon" value="carry_on"
+                           {% if default_mode == 'carry_on' %}checked{% endif %}>
+                    <label for="tm-carryon">
+                        <i class="ti ti-backpack" aria-hidden="true"></i> Carry-on only
+                    </label>
+                    <input type="radio" name="trip_mode" id="tm-backpacking" value="backpacking"
+                           {% if default_mode == 'backpacking' %}checked{% endif %}>
+                    <label for="tm-backpacking">
+                        <i class="ti ti-tent" aria-hidden="true"></i> Backpacking
+                    </label>
+                </div>
+            </div>
+
+            <div class="field" style="margin-top:var(--sp-5)">
+                <span class="field-label" id="bag-label">Bag type</span>
+                <div class="pill-group" role="radiogroup" aria-labelledby="bag-label">
+                    {% set default_bag = saved_trip.bag_type if saved_trip else 'carry_on' %}
+                    <input type="radio" name="bag_type" id="bag-carryon" value="carry_on"
+                           {% if default_bag == 'carry_on' %}checked{% endif %}>
+                    <label for="bag-carryon">
+                        <i class="ti ti-backpack" aria-hidden="true"></i> Carry-on
+                    </label>
+                    <input type="radio" name="bag_type" id="bag-checked" value="checked"
+                           {% if default_bag == 'checked' %}checked{% endif %}>
+                    <label for="bag-checked">
+                        <i class="ti ti-luggage" aria-hidden="true"></i> Checked bag
+                    </label>
+                    <input type="radio" name="bag_type" id="bag-backpack" value="backpacking"
+                           {% if default_bag == 'backpacking' %}checked{% endif %}>
+                    <label for="bag-backpack">
+                        <i class="ti ti-tent" aria-hidden="true"></i> Backpacking pack
+                    </label>
+                </div>
+            </div>
+
+            <div class="field" style="margin-top:var(--sp-5)">
+                <span class="field-label" id="with-label">Travelling with</span>
+                <div class="pill-group" role="radiogroup" aria-labelledby="with-label">
+                    {% set default_with = saved_trip.travelling_with if saved_trip else 'solo' %}
+                    <input type="radio" name="travelling_with" id="with-solo" value="solo"
+                           {% if default_with == 'solo' %}checked{% endif %}>
+                    <label for="with-solo">
+                        <i class="ti ti-user" aria-hidden="true"></i> Solo
+                    </label>
+                    <input type="radio" name="travelling_with" id="with-partner" value="partner"
+                           {% if default_with == 'partner' %}checked{% endif %}>
+                    <label for="with-partner">
+                        <i class="ti ti-users" aria-hidden="true"></i> Partner
+                    </label>
+                    <input type="radio" name="travelling_with" id="with-family" value="family"
+                           {% if default_with == 'family' %}checked{% endif %}>
+                    <label for="with-family">
+                        <i class="ti ti-users-group" aria-hidden="true"></i> Family
+                    </label>
+                    <input type="radio" name="travelling_with" id="with-friends" value="friends"
+                           {% if default_with == 'friends' %}checked{% endif %}>
+                    <label for="with-friends">
+                        <i class="ti ti-confetti" aria-hidden="true"></i> Friends
+                    </label>
+                </div>
+            </div>
+
+            <div class="field" style="margin-top:var(--sp-5)">
+                <span class="field-label" id="laundry-label">Laundry access</span>
+                <div class="pill-group" role="radiogroup" aria-labelledby="laundry-label">
+                    {% set default_laundry = saved_trip.laundry_access if saved_trip else 'some' %}
+                    <input type="radio" name="laundry_access" id="laundry-none" value="none"
+                           {% if default_laundry == 'none' %}checked{% endif %}>
+                    <label for="laundry-none">
+                        <i class="ti ti-x" aria-hidden="true"></i> None
+                    </label>
+                    <input type="radio" name="laundry_access" id="laundry-some" value="some"
+                           {% if default_laundry == 'some' %}checked{% endif %}>
+                    <label for="laundry-some">
+                        <i class="ti ti-refresh" aria-hidden="true"></i> Some
+                    </label>
+                    <input type="radio" name="laundry_access" id="laundry-daily" value="daily"
+                           {% if default_laundry == 'daily' %}checked{% endif %}>
+                    <label for="laundry-daily">
+                        <i class="ti ti-check" aria-hidden="true"></i> Daily access
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        {# Activities #}
+        <div class="card trip-section">
+            <p class="section-title">Activities</p>
+            <div class="field">
+                <span class="field-label">What will you be doing?</span>
+                <p class="field-hint">We'll add the right gear to your list.</p>
+
+                {% set trip_activities = saved_trip.activities if saved_trip else (profile.default_activities or []) %}
+
+                <div class="activity-grid" role="group" aria-label="Trip activities">
+                    <div class="activity-chip">
+                        <input type="checkbox" name="activities_list" id="act-hiking" value="hiking"
+                               {% if 'hiking' in trip_activities %}checked{% endif %}>
+                        <label for="act-hiking"><i class="ti ti-mountain" aria-hidden="true"></i> Hiking</label>
+                    </div>
+                    <div class="activity-chip">
+                        <input type="checkbox" name="activities_list" id="act-swimming" value="swimming"
+                               {% if 'swimming' in trip_activities %}checked{% endif %}>
+                        <label for="act-swimming"><i class="ti ti-swimming" aria-hidden="true"></i> Swimming</label>
+                    </div>
+                    <div class="activity-chip">
+                        <input type="checkbox" name="activities_list" id="act-cycling" value="cycling"
+                               {% if 'cycling' in trip_activities %}checked{% endif %}>
+                        <label for="act-cycling"><i class="ti ti-bike" aria-hidden="true"></i> Cycling</label>
+                    </div>
+                    <div class="activity-chip">
+                        <input type="checkbox" name="activities_list" id="act-running" value="running"
+                               {% if 'running' in trip_activities %}checked{% endif %}>
+                        <label for="act-running"><i class="ti ti-run" aria-hidden="true"></i> Running</label>
+                    </div>
+                    <div class="activity-chip">
+                        <input type="checkbox" name="activities_list" id="act-skiing" value="skiing"
+                               {% if 'skiing' in trip_activities %}checked{% endif %}>
+                        <label for="act-skiing"><i class="ti ti-brand-snowflake" aria-hidden="true"></i> Skiing</label>
+                    </div>
+                    <div class="activity-chip">
+                        <input type="checkbox" name="activities_list" id="act-beach" value="beach"
+                               {% if 'beach' in trip_activities %}checked{% endif %}>
+                        <label for="act-beach"><i class="ti ti-umbrella-beach" aria-hidden="true"></i> Beach</label>
+                    </div>
+                    <div class="activity-chip">
+                        <input type="checkbox" name="activities_list" id="act-gym" value="gym"
+                               {% if 'gym' in trip_activities %}checked{% endif %}>
+                        <label for="act-gym"><i class="ti ti-barbell" aria-hidden="true"></i> Gym</label>
+                    </div>
+                    <div class="activity-chip">
+                        <input type="checkbox" name="activities_list" id="act-formal" value="formal_event"
+                               {% if 'formal_event' in trip_activities %}checked{% endif %}>
+                        <label for="act-formal"><i class="ti ti-tie" aria-hidden="true"></i> Formal event</label>
+                    </div>
+                </div>
+
+                {# Hidden field which collects checkbox values as comma-separated for the route #}
+                <input type="hidden" id="activities-hidden" name="activities" value="{{ trip_activities | join(',') }}">
+            </div>
+        </div>
+
+        {# Submit #}
+        <div class="submit-bar">
+            <p class="submit-note">
+                <i class="ti ti-cloud" aria-hidden="true"></i>
+                We'll fetch the weather forecast for each destination
+            </p>
+            <button type="submit" class="btn btn-primary" id="submit-btn">
+                <i class="ti ti-checklist" aria-hidden="true"></i>
+                Build packing list
+            </button>
+        </div>
+
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    (function () {
+        'use strict';
+
+        const legsList = document.getElementById('legs-list');
+        const addBtn   = document.getElementById('add-leg-btn');
+        let   legCount = legsList.querySelectorAll('.leg-card').length;
+
+        /* CITY AUTOCOMPLETE, Calls Nominatim /search, shows a dropdown of cities. Debounced to avoid hammering the API. */
+
+        const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
+        let   _acTimer  = null;
+
+        function attachAutocomplete(input, suggBox) {
+            let   focusedIdx = -1;
+            let   lastQuery  = '';
+
+            input.addEventListener('input', function () {
+                const q = this.value.trim();
+                clearTimeout(_acTimer);
+                if (q.length < 2) { closeDropdown(); return; }
+                if (q === lastQuery) return;
+                _acTimer = setTimeout(() => fetchSuggestions(q), 300);
+            });
+
+            input.addEventListener('keydown', function (e) {
+                const items = suggBox.querySelectorAll('.city-suggestion');
+                if (!suggBox.classList.contains('open') || !items.length) return;
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    focusedIdx = Math.min(focusedIdx + 1, items.length - 1);
+                    highlight(items, focusedIdx);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    focusedIdx = Math.max(focusedIdx - 1, 0);
+                    highlight(items, focusedIdx);
+                } else if (e.key === 'Enter' && focusedIdx >= 0) {
+                    e.preventDefault();
+                    items[focusedIdx].click();
+                } else if (e.key === 'Escape') {
+                    closeDropdown();
+                }
+            });
+
+            /* Close on outside click */
+            document.addEventListener('click', function (e) {
+                if (!input.contains(e.target) && !suggBox.contains(e.target)) closeDropdown();
+            }, true);
+
+            function fetchSuggestions(q) {
+                lastQuery = q;
+                /* Query Nominatim for cities/towns only, deduplicated by display name */
+                const url = `${NOMINATIM}?city=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=10&featuretype=city`;
+                fetch(url, { headers: { 'Accept-Language': 'en' } })
+                    .then(r => r.json())
+                    .then(results => {
+                        /* Keep only genuine city/town/suburb entries */
+                        const GOOD_TYPES = new Set([
+                            'city', 'town', 'municipality', 'borough',
+                            'suburb', 'administrative', 'capital',
+                        ]);
+                        const qLower = q.toLowerCase();
+
+                        const filtered = results
+                            .filter(r => {
+                                const addr = r.address || {};
+                                const type = r.addresstype || r.type || '';
+                                /* Must be a recognised city-level type */
+                                if (!GOOD_TYPES.has(type) && r.class !== 'place') return false;
+                                /* The matched name must actually contain the query string */
+                                const name = (addr.city || addr.town || addr.suburb || r.name || '').toLowerCase();
+                                return name.includes(qLower);
+                            })
+                            /* Sort: exact prefix matches first */
+                            .sort((a, b) => {
+                                const na = (a.address?.city || a.address?.town || a.name || '').toLowerCase();
+                                const nb = (b.address?.city || b.address?.town || b.name || '').toLowerCase();
+                                const aStarts = na.startsWith(qLower) ? 0 : 1;
+                                const bStarts = nb.startsWith(qLower) ? 0 : 1;
+                                return aStarts - bStarts;
+                            })
+                            /* Deduplicate by "City, Country" */
+                            .filter((r, _i, arr) => {
+                                const addr = r.address || {};
+                                const key  = `${addr.city || addr.town || r.name}|${addr.country}`;
+                                return arr.findIndex(x => {
+                                    const xa = x.address || {};
+                                    return `${xa.city || xa.town || x.name}|${xa.country}` === key;
+                                }) === _i;
+                            })
+                            .slice(0, 6);
+
+                        renderSuggestions(filtered);
+                    })
+                    .catch(() => closeDropdown());
+            }
+
+            function renderSuggestions(results) {
+                suggBox.innerHTML = '';
+                focusedIdx = -1;
+                if (!results.length) { closeDropdown(); return; }
+
+                results.forEach(place => {
+                    const addr    = place.address || {};
+                    const city    = addr.city || addr.town || addr.village || addr.municipality || place.name;
+                    const country = addr.country || '';
+                    const display = country ? `${city}, ${country}` : city;
+
+                    const item = document.createElement('div');
+                    item.className   = 'city-suggestion';
+                    item.role        = 'option';
+                    item.innerHTML   = `
+          <i class="ti ti-map-pin" aria-hidden="true" style="font-size:0.85rem;color:var(--text-muted)"></i>
+          <span><span class="city-name">${city}</span>
+          ${country ? `<span class="city-country">&nbsp;&middot;&nbsp;${country}</span>` : ''}</span>
+        `;
+                    item.addEventListener('mousedown', function (e) {
+                        e.preventDefault(); /* keep focus on input */
+                        input.value = display;
+                        input.dataset.resolvedCity = display;
+                        closeDropdown();
+                        /* Move focus to the From date */
+                        const card = input.closest('.leg-card');
+                        if (card) {
+                            const dateInput = card.querySelector('.date-start');
+                            if (dateInput) dateInput.focus();
+                        }
+                    });
+                    suggBox.appendChild(item);
+                });
+
+                suggBox.classList.add('open');
+            }
+
+            function highlight(items, idx) {
+                items.forEach((el, i) => el.classList.toggle('focused', i === idx));
+            }
+
+            function closeDropdown() {
+                suggBox.classList.remove('open');
+                suggBox.innerHTML = '';
+                focusedIdx = -1;
+            }
+        }
+
+        /* Wire autocomplete to all existing city inputs */
+        function wireAutocompleteForCard(card) {
+            const input   = card.querySelector('.city-input');
+            const suggBox = card.querySelector('.city-suggestions');
+            if (input && suggBox) attachAutocomplete(input, suggBox);
+        }
+
+        legsList.querySelectorAll('.leg-card').forEach(wireAutocompleteForCard);
+
+
+        /* DATE CHAIN VALIDATION Rules: 1. Within a leg: end >= start 2. Across legs: leg[N].start >= leg[N-1].end. Shows an inline error message and blocks submit. */
+
+        function getCards() {
+            return Array.from(legsList.querySelectorAll('.leg-card'));
+        }
+
+        function validateDates() {
+            const cards   = getCards();
+            let   hasErr  = false;
+            let   prevEnd = null;   /* ISO string of previous leg's end date */
+
+            cards.forEach((card, i) => {
+                const startEl = card.querySelector('.date-start');
+                const endEl   = card.querySelector('.date-end');
+                const errEl   = card.querySelector('.date-error');
+                if (!startEl || !endEl) return;
+
+                const startVal = startEl.value;
+                const endVal   = endEl.value;
+                let   msg      = '';
+
+                /* Rule 1: end must be on or after start */
+                if (startVal && endVal && endVal < startVal) {
+                    msg = 'End date must be after the start date.';
+                }
+
+                /* Rule 2: this leg must start on or after previous leg's end */
+                if (!msg && prevEnd && startVal && startVal < prevEnd) {
+                    const prevLabel = i > 0 ? `Destination ${i}` : '';
+                    msg = `Start date must be on or after ${prevLabel}'s end (${prevEnd}).`;
+                }
+
+                /* Apply / clear */
+                if (msg) {
+                    hasErr = true;
+                    if (errEl) { errEl.textContent = msg; errEl.classList.add('show'); }
+                    endEl.classList.add('date-invalid');
+                    startEl.classList.add('date-invalid');
+                } else {
+                    if (errEl) { errEl.textContent = ''; errEl.classList.remove('show'); }
+                    endEl.classList.remove('date-invalid');
+                    startEl.classList.remove('date-invalid');
+                }
+
+                /* Enforce min on next leg's start */
+                if (endVal) prevEnd = endVal;
+            });
+
+            return !hasErr;
+        }
+
+        /* Enforce min attr on start dates when the previous end changes */
+        function applyDateConstraints() {
+            const cards = getCards();
+            cards.forEach((card, i) => {
+                if (i === 0) return;
+                const prevCard = cards[i - 1];
+                const prevEnd  = prevCard.querySelector('.date-end');
+                const thisStart = card.querySelector('.date-start');
+                if (prevEnd && thisStart && prevEnd.value) {
+                    thisStart.min = prevEnd.value;
+                }
+            });
+        }
+
+        /* Listen on all date inputs */
+        legsList.addEventListener('change', function (e) {
+            if (e.target.matches('.date-start, .date-end')) {
+                /* If start changed, push min to end in same card */
+                const card   = e.target.closest('.leg-card');
+                if (card && e.target.matches('.date-start')) {
+                    const endEl = card.querySelector('.date-end');
+                    if (endEl) endEl.min = e.target.value;
+                }
+                applyDateConstraints();
+                validateDates();
+            }
+        });
+
+        /* Init constraints on page load (edit mode) */
+        applyDateConstraints();
+        validateDates();
+
+
+        /* LEG MANAGEMENT */
+
+        addBtn.addEventListener('click', function () {
+            const idx  = legCount;
+
+            /* Get the previous leg's end date to pre-fill min */
+            const prevCards = getCards();
+            const prevEnd   = prevCards.length
+                ? (prevCards[prevCards.length - 1].querySelector('.date-end')?.value || '')
+                : '';
+
+            const card = document.createElement('div');
+            card.className   = 'leg-card';
+            card.dataset.leg = idx;
+            card.innerHTML   = `
+      <div class="leg-card-header">
+        <span class="leg-label">Destination ${idx + 1}</span>
+        <button type="button" class="leg-remove" onclick="window.removeLeg(this)" aria-label="Remove destination">
+          <i class="ti ti-x" aria-hidden="true"></i>
+        </button>
+      </div>
+      <div class="leg-city field">
+        <label class="field-label" for="leg-city-${idx}">City</label>
+        <div class="city-wrap">
+          <input
+            type="text"
+            id="leg-city-${idx}"
+            name="legs[${idx}][city]"
+            placeholder="e.g. Paris, France"
+            required
+            autocomplete="off"
+            class="city-input"
+            data-leg="${idx}"
+          >
+          <div class="city-suggestions" id="sugg-${idx}" role="listbox"></div>
+        </div>
+      </div>
+      <div class="leg-dates">
+        <div class="field">
+          <label class="field-label" for="leg-start-${idx}">From</label>
+          <input type="date" id="leg-start-${idx}" name="legs[${idx}][start]"
+            required class="date-start" data-leg="${idx}"
+            ${prevEnd ? `min="${prevEnd}" value="${prevEnd}"` : ''}>
+        </div>
+        <div class="field">
+          <label class="field-label" for="leg-end-${idx}">To</label>
+          <input type="date" id="leg-end-${idx}" name="legs[${idx}][end]"
+            required class="date-end" data-leg="${idx}"
+            ${prevEnd ? `min="${prevEnd}"` : ''}>
+          <span class="date-error" id="date-err-${idx}"></span>
+        </div>
+      </div>
+    `;
+
+            legsList.appendChild(card);
+            legCount++;
+            wireAutocompleteForCard(card);
+            card.querySelector('.city-input').focus();
+            renumberLegs();
+            applyDateConstraints();
+        });
+
+        function removeLeg(btn) {
+            if (getCards().length <= 1) return;
+            btn.closest('.leg-card').remove();
+            renumberLegs();
+            applyDateConstraints();
+            validateDates();
+        }
+
+        function renumberLegs() {
+            getCards().forEach((card, i) => {
+                const label = card.querySelector('.leg-label');
+                if (label) label.textContent = `Destination ${i + 1}`;
+            });
+        }
+
+        window.removeLeg = removeLeg;
+
+
+        /* ACTIVITIES HIDDEN FIELD SYNC */
+
+        const actCheckboxes = document.querySelectorAll('input[name="activities_list"]');
+        const actHidden     = document.getElementById('activities-hidden');
+
+        function syncActivities() {
+            actHidden.value = Array.from(actCheckboxes)
+                .filter(cb => cb.checked)
+                .map(cb => cb.value)
+                .join(',');
+        }
+
+        actCheckboxes.forEach(cb => cb.addEventListener('change', syncActivities));
+        syncActivities();
+
+
+        document.getElementById('trip-form').addEventListener('submit', function (e) {
+            if (!validateDates()) {
+                e.preventDefault();
+                /* Scroll to first error */
+                const firstErr = legsList.querySelector('.date-error.show');
+                if (firstErr) firstErr.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                return;
+            }
+            const btn = document.getElementById('submit-btn');
+            btn.disabled  = true;
+            btn.innerHTML = '<i class="ti ti-loader-2 ti-spin" aria-hidden="true"></i> Building your list...';
+        });
+
+    })();
+</script>
+{% endblock %}

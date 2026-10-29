@@ -1,0 +1,458 @@
+{% extends "layout.html" %}
+
+{% block title %}Preferences{% endblock %}
+{% block meta_description %}Customise how Dressed picks outfits and trip packing lists for you.{% endblock %}
+
+{% block extra_head %}
+<style>
+    /* ── Page layout ── */
+    .prefs-page {
+        max-width: 680px;
+        margin: 0 auto;
+        padding: var(--sp-8) var(--sp-4) var(--sp-16);
+    }
+
+    .prefs-header {
+        margin-bottom: var(--sp-8);
+    }
+
+    .prefs-header h1 {
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        letter-spacing: -0.025em;
+        margin-bottom: var(--sp-1);
+    }
+
+    .prefs-header p {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+    }
+
+    /* ── Sections ── */
+    .prefs-section {
+        margin-bottom: var(--sp-6);
+    }
+
+    .prefs-section-title {
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        color: var(--text-muted);
+        margin-bottom: var(--sp-3);
+        padding-bottom: var(--sp-2);
+        border-bottom: 1px solid var(--border);
+    }
+
+    /* ── Pill radio groups ── */
+    .pill-group {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--sp-2);
+    }
+
+    .pill-group input[type="radio"] {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .pill-group label {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--sp-1-5);
+        padding: 0.4rem 0.9rem;
+        border-radius: 999px;
+        border: 1.5px solid var(--border);
+        background: var(--surface);
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: border-color var(--tx-fast), background var(--tx-fast), color var(--tx-fast);
+        user-select: none;
+    }
+
+    .pill-group label:hover {
+        border-color: var(--green-400);
+        color: var(--text-primary);
+    }
+
+    .pill-group input[type="radio"]:checked + label {
+        border-color: var(--green-600);
+        background: var(--green-50);
+        color: var(--green-700);
+    }
+
+    .pill-group input[type="radio"]:focus-visible + label {
+        outline: 2px solid var(--green-400);
+        outline-offset: 2px;
+    }
+
+    /* ── Checkbox chip grid (activities) ── */
+    .activity-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: var(--sp-2);
+    }
+
+    .activity-chip {
+        position: relative;
+    }
+
+    .activity-chip input[type="checkbox"] {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+    }
+
+    .activity-chip label {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-2);
+        padding: var(--sp-3) var(--sp-3);
+        border-radius: var(--r-md);
+        border: 1.5px solid var(--border);
+        background: var(--surface);
+        color: var(--text-secondary);
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: border-color var(--tx-fast), background var(--tx-fast), color var(--tx-fast);
+        user-select: none;
+    }
+
+    .activity-chip label:hover {
+        border-color: var(--green-400);
+        color: var(--text-primary);
+    }
+
+    .activity-chip input[type="checkbox"]:checked + label {
+        border-color: var(--green-600);
+        background: var(--green-50);
+        color: var(--green-700);
+    }
+
+    .activity-chip input[type="checkbox"]:focus-visible + label {
+        outline: 2px solid var(--green-400);
+        outline-offset: 2px;
+    }
+
+    .activity-chip .ti {
+        font-size: 1.1rem;
+    }
+
+    /* ── Form field layout ── */
+    .prefs-field {
+        display: flex;
+        flex-direction: column;
+        gap: var(--sp-2);
+    }
+
+    .prefs-field + .prefs-field {
+        margin-top: var(--sp-5);
+    }
+
+    .prefs-label {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .prefs-hint {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        margin-top: calc(-1 * var(--sp-1));
+    }
+
+    /* ── Save bar ── */
+    .prefs-save-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--sp-4);
+        padding-top: var(--sp-6);
+        border-top: 1px solid var(--border);
+        margin-top: var(--sp-6);
+    }
+
+    .prefs-anon-note {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        display: flex;
+        align-items: center;
+        gap: var(--sp-1-5);
+    }
+
+    /* ── Anon banner ── */
+    .prefs-anon-banner {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--sp-3);
+        padding: var(--sp-4);
+        border-radius: var(--r-md);
+        background: var(--amber-50, #fffbeb);
+        border: 1px solid var(--amber-200, #fde68a);
+        color: var(--amber-800, #92400e);
+        font-size: 0.875rem;
+        margin-bottom: var(--sp-6);
+    }
+
+    .prefs-anon-banner .ti {
+        font-size: 1.1rem;
+        flex-shrink: 0;
+        margin-top: 1px;
+        color: var(--amber-600, #d97706);
+    }
+
+    .prefs-anon-banner a {
+        color: var(--amber-700, #b45309);
+        font-weight: 600;
+        text-decoration: underline;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="prefs-page">
+
+    <div class="prefs-header">
+        <h1>Preferences</h1>
+        <p>Tell Dressed about yourself so recommendations fit you, not a default.</p>
+    </div>
+
+    {% if not user %}
+    <div class="prefs-anon-banner" role="note">
+        <i class="ti ti-info-circle" aria-hidden="true"></i>
+        <div>
+            These preferences are saved to this browser only.
+            <a href="{{ url_for('auth.register') }}">Create an account</a> to keep them across devices.
+        </div>
+    </div>
+    {% endif %}
+
+    {% if error %}
+    <div class="alert alert-error" role="alert" style="margin-bottom:var(--sp-5)">
+        <i class="ti ti-alert-circle" aria-hidden="true"></i>
+        <span>{{ error }}</span>
+    </div>
+    {% endif %}
+
+    <form
+            action="{{ url_for('main.profile_save') }}"
+            method="POST"
+            aria-label="Preferences form"
+    >
+
+        {# ── Temperature sensitivity ── #}
+        <div class="card prefs-section">
+            <p class="prefs-section-title">Temperature</p>
+
+            <div class="prefs-field">
+                <span class="prefs-label" id="temp-label">How do you usually feel in the heat?</span>
+                <p class="prefs-hint">Affects how many layers we suggest and when we flag "too warm".</p>
+                <div class="pill-group" role="radiogroup" aria-labelledby="temp-label">
+
+                    <input type="radio" name="temp_sensitivity" id="ts-warm" value="warm"
+                           {% if profile.temp_sensitivity == 'warm' %}checked{% endif %}>
+                    <label for="ts-warm">
+                        <i class="ti ti-sun" aria-hidden="true"></i> I run warm
+                    </label>
+
+                    <input type="radio" name="temp_sensitivity" id="ts-neutral" value="neutral"
+                           {% if profile.temp_sensitivity == 'neutral' or not profile.temp_sensitivity %}checked{% endif %}>
+                    <label for="ts-neutral">
+                        <i class="ti ti-circle-half" aria-hidden="true"></i> Neutral
+                    </label>
+
+                    <input type="radio" name="temp_sensitivity" id="ts-cold" value="cold"
+                           {% if profile.temp_sensitivity == 'cold' %}checked{% endif %}>
+                    <label for="ts-cold">
+                        <i class="ti ti-snowflake" aria-hidden="true"></i> I feel the cold
+                    </label>
+
+                </div>
+            </div>
+        </div>
+
+        {# ── Style preference ── #}
+        <div class="card prefs-section">
+            <p class="prefs-section-title">Style</p>
+
+            <div class="prefs-field">
+                <span class="prefs-label" id="style-label">Default dress code</span>
+                <p class="prefs-hint">We use this when no specific occasion is set.</p>
+                <div class="pill-group" role="radiogroup" aria-labelledby="style-label">
+
+                    <input type="radio" name="style_pref" id="sp-casual" value="casual"
+                           {% if profile.style_pref == 'casual' %}checked{% endif %}>
+                    <label for="sp-casual">
+                        <i class="ti ti-shirt" aria-hidden="true"></i> Casual
+                    </label>
+
+                    <input type="radio" name="style_pref" id="sp-smart" value="smart_casual"
+                           {% if profile.style_pref == 'smart_casual' or not profile.style_pref %}checked{% endif %}>
+                    <label for="sp-smart">
+                        <i class="ti ti-tie" aria-hidden="true"></i> Smart casual
+                    </label>
+
+                    <input type="radio" name="style_pref" id="sp-formal" value="formal"
+                           {% if profile.style_pref == 'formal' %}checked{% endif %}>
+                    <label for="sp-formal">
+                        <i class="ti ti-briefcase" aria-hidden="true"></i> Formal
+                    </label>
+
+                </div>
+            </div>
+
+            <div class="prefs-field" style="margin-top:var(--sp-5)">
+                <span class="prefs-label" id="wardrobe-label">Wardrobe</span>
+                <p class="prefs-hint">Shapes the specific items we suggest.</p>
+                <div class="pill-group" role="radiogroup" aria-labelledby="wardrobe-label">
+
+                    <input type="radio" name="wardrobe_pref" id="wp-mens" value="menswear"
+                           {% if profile.wardrobe_pref == 'menswear' %}checked{% endif %}>
+                    <label for="wp-mens">Menswear</label>
+
+                    <input type="radio" name="wardrobe_pref" id="wp-womens" value="womenswear"
+                           {% if profile.wardrobe_pref == 'womenswear' %}checked{% endif %}>
+                    <label for="wp-womens">Womenswear</label>
+
+                    <input type="radio" name="wardrobe_pref" id="wp-both" value="both"
+                           {% if profile.wardrobe_pref == 'both' %}checked{% endif %}>
+                    <label for="wp-both">Both</label>
+
+                    <input type="radio" name="wardrobe_pref" id="wp-neutral" value="neutral"
+                           {% if profile.wardrobe_pref == 'neutral' or not profile.wardrobe_pref %}checked{% endif %}>
+                    <label for="wp-neutral">No preference</label>
+
+                </div>
+            </div>
+
+            <div class="prefs-field" style="margin-top:var(--sp-5)">
+                <span class="prefs-label" id="layer-label">Layering</span>
+                <p class="prefs-hint">Whether to include layering pieces in mild weather.</p>
+                <div class="pill-group" role="radiogroup" aria-labelledby="layer-label">
+
+                    <input type="radio" name="layering_pref" id="lp-min" value="minimal"
+                           {% if profile.layering_pref == 'minimal' or not profile.layering_pref %}checked{% endif %}>
+                    <label for="lp-min">
+                        <i class="ti ti-minus" aria-hidden="true"></i> Keep it simple
+                    </label>
+
+                    <input type="radio" name="layering_pref" id="lp-yes" value="yes"
+                           {% if profile.layering_pref == 'yes' %}checked{% endif %}>
+                    <label for="lp-yes">
+                        <i class="ti ti-stack-2" aria-hidden="true"></i> I like to layer
+                    </label>
+
+                </div>
+            </div>
+        </div>
+
+        {# ── Trip defaults ── #}
+        <div class="card prefs-section">
+            <p class="prefs-section-title">Trip defaults</p>
+
+            <div class="prefs-field">
+                <span class="prefs-label" id="tripmode-label">Default packing mode</span>
+                <p class="prefs-hint">Used as the starting point when you plan a new trip.</p>
+                <div class="pill-group" role="radiogroup" aria-labelledby="tripmode-label">
+
+                    <input type="radio" name="default_trip_mode" id="tm-regular" value="regular"
+                           {% if profile.default_trip_mode == 'regular' or not profile.default_trip_mode %}checked{% endif %}>
+                    <label for="tm-regular">
+                        <i class="ti ti-luggage" aria-hidden="true"></i> Checked bag
+                    </label>
+
+                    <input type="radio" name="default_trip_mode" id="tm-carryon" value="carry_on"
+                           {% if profile.default_trip_mode == 'carry_on' %}checked{% endif %}>
+                    <label for="tm-carryon">
+                        <i class="ti ti-backpack" aria-hidden="true"></i> Carry-on only
+                    </label>
+
+                    <input type="radio" name="default_trip_mode" id="tm-backpacking" value="backpacking"
+                           {% if profile.default_trip_mode == 'backpacking' %}checked{% endif %}>
+                    <label for="tm-backpacking">
+                        <i class="ti ti-tent" aria-hidden="true"></i> Backpacking
+                    </label>
+
+                </div>
+            </div>
+        </div>
+
+        {# ── Activities ── #}
+        <div class="card prefs-section">
+            <p class="prefs-section-title">Activities</p>
+
+            <div class="prefs-field">
+                <span class="prefs-label">Activities you typically pack for</span>
+                <p class="prefs-hint">We'll add the right gear to your packing lists automatically.</p>
+
+                <div class="activity-grid" role="group" aria-label="Default activities">
+
+                    {% set current_activities = profile.default_activities or [] %}
+
+                    <div class="activity-chip">
+                        <input type="checkbox" name="default_activities" id="act-cycling" value="cycling"
+                               {% if 'cycling' in current_activities %}checked{% endif %}>
+                        <label for="act-cycling">
+                            <i class="ti ti-bike" aria-hidden="true"></i> Cycling
+                        </label>
+                    </div>
+
+                    <div class="activity-chip">
+                        <input type="checkbox" name="default_activities" id="act-hiking" value="hiking"
+                               {% if 'hiking' in current_activities %}checked{% endif %}>
+                        <label for="act-hiking">
+                            <i class="ti ti-mountain" aria-hidden="true"></i> Hiking
+                        </label>
+                    </div>
+
+                    <div class="activity-chip">
+                        <input type="checkbox" name="default_activities" id="act-swimming" value="swimming"
+                               {% if 'swimming' in current_activities %}checked{% endif %}>
+                        <label for="act-swimming">
+                            <i class="ti ti-swimming" aria-hidden="true"></i> Swimming
+                        </label>
+                    </div>
+
+                    <div class="activity-chip">
+                        <input type="checkbox" name="default_activities" id="act-running" value="running"
+                               {% if 'running' in current_activities %}checked{% endif %}>
+                        <label for="act-running">
+                            <i class="ti ti-run" aria-hidden="true"></i> Running
+                        </label>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        {# ── Save bar ── #}
+        <div class="prefs-save-bar">
+            {% if not user %}
+            <p class="prefs-anon-note">
+                <i class="ti ti-device-floppy" aria-hidden="true"></i>
+                Saved to this browser only
+            </p>
+            {% else %}
+            <p class="prefs-anon-note">
+                <i class="ti ti-user-check" aria-hidden="true"></i>
+                Saved to your account
+            </p>
+            {% endif %}
+
+            <button type="submit" class="btn btn-primary">
+                <i class="ti ti-check" aria-hidden="true"></i>
+                Save preferences
+            </button>
+        </div>
+
+    </form>
+
+</div>
+{% endblock %}

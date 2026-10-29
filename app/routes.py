@@ -1,5 +1,6 @@
 ﻿import uuid
 import logging
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
@@ -104,7 +105,7 @@ def set_anon_cookie(response):
     return response
 
 # Helpers
-def _get_or_create_forecast(city: str, lat: float, lng: float,start_date: str, end_date: str) -> Optional[list]:
+def _get_or_create_forecast(city: str, lat: float, lng: float, start_date: str, end_date: str) -> Optional[list]:
     # Fetch a forecast from cache or Open-Meteo.
     from datetime import date as date_type
     date_range_key = forecast_date_range(
@@ -163,7 +164,7 @@ def _fetch_signals_from_cache_response(response: dict) -> list:
     # Guard against corrupt/empty cache entries (no 'daily' key)
     if not response or "daily" not in response:
         logger.warning(
-            "Cache entry has no usable data (keys: %s) � treating as cache miss",
+            "Cache entry has no usable data (keys: %s) - treating as cache miss",
             list(response.keys()),
         )
         raise ValueError("Corrupt cache entry: no 'signals' or 'daily' key")
@@ -187,7 +188,7 @@ def _rate_limited(endpoint: str) -> bool:
         LoginAttempt.ip_address == request.remote_addr,
         LoginAttempt.attempted_at >= cutoff,
         LoginAttempt.username == endpoint,
-    ).count()
+        ).count()
 
     if count >= max_requests:
         return True
@@ -279,38 +280,30 @@ def trip_create():
     db.session.add(new_trip)
     db.session.flush()
 
-    # Geocode + forecast per leg
+    # ── Geocode + forecast per leg (parallel) ────────────────────────────────
     leg_instances = []
     leg_dicts     = []
 
-    for order, leg_raw in enumerate(legs_raw, start=1):
+    def _process_leg(order: int, leg_raw: dict):
+        """Geocode one leg and fetch its forecast. Returns (order, result_dict, error_str)."""
         city_str   = leg_raw.get("city", "").strip()
         start_date = leg_raw.get("start", "")
         end_date   = leg_raw.get("end",   "")
 
         if not city_str or not start_date or not end_date:
-            continue
+            return order, None, None   # skip silently
 
-        # Geocode
         geo = geocode(city_str)
         if geo is None:
-            db.session.rollback()
-            return render_template(
-                "trip.html",
-                error   = f"Could not find city: {city_str}. Please check the spelling.",
-                profile = g.profile_dict,
-                user    = g.user,
-            )
+            return order, None, f"Could not find city: {city_str}. Please check the spelling."
 
-        # Determine context flags
         from app.core.weather import is_high_altitude
         context_flags = {
             "conservative": leg_raw.get("conservative") == "true",
-            "high_altitude": is_high_altitude(0),  # updated after forecast fetch
-            "remote": leg_raw.get("remote") == "true",
+            "high_altitude": False,
+            "remote":        leg_raw.get("remote") == "true",
         }
 
-        # Fetch forecast
         signals = _get_or_create_forecast(
             city       = geo["short_name"],
             lat        = geo["lat"],
@@ -320,10 +313,48 @@ def trip_create():
         )
 
         if signals:
-            # Update altitude flag from first signal
             context_flags["high_altitude"] = signals[0].get("is_high_altitude", False)
 
-        # Create TripLeg
+        return order, {
+            "leg_raw":       leg_raw,
+            "geo":           geo,
+            "signals":       signals or [],
+            "context_flags": context_flags,
+            "start_date":    start_date,
+            "end_date":      end_date,
+        }, None
+
+    # Run all legs in parallel (cap at 6 workers; typical trips have 1-3 legs)
+    ordered_results = {}
+    with ThreadPoolExecutor(max_workers=min(len(legs_raw), 6)) as pool:
+        futures = {
+            pool.submit(_process_leg, order, leg_raw): order
+            for order, leg_raw in enumerate(legs_raw, start=1)
+        }
+        for future in as_completed(futures):
+            order, data, err = future.result()
+            if err:
+                db.session.rollback()
+                return render_template(
+                    "trip.html",
+                    error   = err,
+                    profile = g.profile_dict,
+                    user    = g.user,
+                )
+            if data:
+                ordered_results[order] = data
+
+    # Rebuild legs in original order
+    from datetime import date as date_type
+    for order in sorted(ordered_results.keys()):
+        r   = ordered_results[order]
+        geo = r["geo"]
+
+        duration = max(
+            (date_type.fromisoformat(r["end_date"]) - date_type.fromisoformat(r["start_date"])).days,
+            1,
+        )
+
         leg = TripLeg(
             trip_id           = new_trip.id,
             leg_order         = order,
@@ -331,19 +362,13 @@ def trip_create():
             country           = extract_country(geo["display_name"]),
             lat               = geo["lat"],
             lng               = geo["lng"],
-            start_date        = start_date,
-            end_date          = end_date,
-            forecast_snapshot = {"signals": signals} if signals else None,
-            context_flags     = context_flags,
+            start_date        = r["start_date"],
+            end_date          = r["end_date"],
+            forecast_snapshot = {"signals": r["signals"]} if r["signals"] else None,
+            context_flags     = r["context_flags"],
         )
         db.session.add(leg)
         db.session.flush()
-
-        from datetime import date as date_type
-        duration = max(
-            (date_type.fromisoformat(end_date) - date_type.fromisoformat(start_date)).days,
-            1,
-        )
 
         leg_instances.append(leg)
         leg_dicts.append({
@@ -352,8 +377,8 @@ def trip_create():
             "city":          geo["short_name"],
             "country":       extract_country(geo["display_name"]),
             "duration_days": duration,
-            "forecast":      signals or [],
-            "context_flags": context_flags,
+            "forecast":      r["signals"],
+            "context_flags": r["context_flags"],
         })
 
     if not leg_dicts:
@@ -551,10 +576,6 @@ def api_outfit():
     outfit["temp_min_c"]   = signal.get("temp_min_c", 0)
     outfit["city_name"]    = city   # real name from geocoder; "" if reverse geocode failed
 
-    # Save last-used city in cookie (set on response)
-    response = make_response(jsonify(outfit))
-
-    # Save last-used city in cookie (set on response)
     response = make_response(jsonify(outfit))
     if city:
         response.set_cookie(
@@ -853,4 +874,3 @@ def _parse_legs_from_form(form) -> list[dict]:
         legs[index][field_raw] = value
 
     return [legs[i] for i in sorted(legs.keys())]
-

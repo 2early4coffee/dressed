@@ -272,7 +272,7 @@
 {% block content %}
 <div class="packing-page">
 
-    {# Page header #}
+    {# ── Page header ── #}
     <div class="packing-header">
         <h1>{{ trip.name }}</h1>
         <div class="packing-meta">
@@ -311,14 +311,14 @@
         </span>
             {% endif %}
 
-            <a href="{{ url_for('main.trip_edit', trip_id=trip.id) }}" class="packing-meta-item" style="color:var(--text-muted);text-decoration:none;">
+            <a href="{{ url_for('main.trip') }}?trip_id={{ trip.id }}" class="packing-meta-item" style="color:var(--text-muted);text-decoration:none;">
                 <i class="ti ti-edit" aria-hidden="true"></i> Edit trip
             </a>
 
         </div>
     </div>
 
-    {# Progress bar #}
+    {# ── Progress bar ── #}
     {% set total_items = items | length %}
     {% set checked_count = items | selectattr('packed') | list | length %}
     {% set pct = ((checked_count / total_items * 100) | int) if total_items > 0 else 0 %}
@@ -330,45 +330,29 @@
         <span class="progress-label" id="progress-label">{{ checked_count }}/{{ total_items }}</span>
     </div>
 
-    {# Weather summary pills (per active leg) #}
-    {% if weather_summaries %}
-    <div class="packing-weather" aria-label="Weather summary">
-        {% for leg in weather_summaries %}
+    {# Destination pills (from dest_summary) #}
+    {% if dest_summary %}
+    <div class="packing-weather" aria-label="Destinations">
+        {% for dest in dest_summary %}
         <span class="weather-pill">
           <i class="ti ti-map-pin" aria-hidden="true"></i>
-          {{ leg.city }}
+          {{ dest.city }}
         </span>
-        {% if leg.temp_min_c is not none and leg.temp_max_c is not none %}
+        {% if dest.temp_min_c is defined and dest.temp_max_c is defined %}
         <span class="weather-pill">
             <i class="ti ti-thermometer" aria-hidden="true"></i>
-            {{ leg.temp_min_c | round(0) | int }}&ndash;{{ leg.temp_max_c | round(0) | int }}&deg;C
-          </span>
-        {% endif %}
-        {% if leg.rain_days %}
-        <span class="weather-pill">
-            <i class="ti ti-cloud-rain" aria-hidden="true"></i>
-            Rain on {{ leg.rain_days }} day{{ 's' if leg.rain_days != 1 }}
+            {{ dest.temp_min_c | round(0) | int }}&ndash;{{ dest.temp_max_c | round(0) | int }}&deg;C
           </span>
         {% endif %}
         {% endfor %}
     </div>
     {% endif %}
 
-    {# Leg tabs (multi-destination) #}
-    {% if legs | length > 1 %}
-    <div class="leg-tabs" role="tablist" aria-label="Trip legs">
-        <a href="{{ url_for('main.packing', trip_id=trip.id) }}"
-           class="leg-tab {% if not active_leg %}active{% endif %}"
-           role="tab">
-            All
-        </a>
-        {% for leg in legs %}
-        <a href="{{ url_for('main.packing', trip_id=trip.id, leg=loop.index0) }}"
-           class="leg-tab {% if active_leg == loop.index0 %}active{% endif %}"
-           role="tab">
-            {{ leg.city or ('Leg ' ~ loop.index) }}
-        </a>
-        {% endfor %}
+    {# Zone tip #}
+    {% if zone_tip %}
+    <div class="card" style="margin-bottom:var(--sp-4); padding:var(--sp-3) var(--sp-4); display:flex; gap:var(--sp-2); align-items:flex-start; font-size:0.875rem; color:var(--text-secondary);">
+        <i class="ti ti-info-circle" style="flex-shrink:0; margin-top:1px; color:var(--green-600);" aria-hidden="true"></i>
+        <span>{{ zone_tip }}</span>
     </div>
     {% endif %}
 
@@ -466,7 +450,7 @@
     <div class="card packing-empty">
         <i class="ti ti-package-off"></i>
         <p>No packing items generated yet.</p>
-        <a href="{{ url_for('main.trip_edit', trip_id=trip.id) }}" class="btn btn-primary" style="margin-top:var(--sp-4)">
+        <a href="{{ url_for('main.trip') }}?trip_id={{ trip.id }}" class="btn btn-primary" style="margin-top:var(--sp-4)">
             <i class="ti ti-edit" aria-hidden="true"></i> Edit trip details
         </a>
     </div>
@@ -482,7 +466,8 @@
 
         /* State */
         const TRIP_ID = {{ trip.id | tojson }};
-        const TOGGLE_URL = '/api/packing/toggle';
+        const CHECK_URL = '/api/packing/check';
+        const RESET_URL = '/api/packing/reset';
         let pending = new Set();          // item IDs being saved
 
         /* DOM refs */
@@ -541,14 +526,14 @@
             if (cb) cb.checked = nowPacked;
             updateProgress();
 
-            /* Debounce */
+            /* Debounce: skip if already saving */
             if (pending.has(itemId)) return;
             pending.add(itemId);
 
-            fetch(TOGGLE_URL, {
+            fetch(CHECK_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
-                body: JSON.stringify({ trip_id: TRIP_ID, item_id: itemId, packed: nowPacked }),
+                body: JSON.stringify({ item_id: parseInt(itemId), checked: nowPacked }),
             })
                 .then(r => {
                     if (!r.ok) throw new Error('Network response not ok');
@@ -577,14 +562,24 @@
             });
             updateProgress();
 
-            fetch(TOGGLE_URL + '/bulk', {
+            /* Use reset endpoint: category='all' clears all, then re-check if packing=true */
+            fetch(RESET_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
-                body: JSON.stringify({ trip_id: TRIP_ID, item_ids: itemIds, packed }),
-            }).catch(() => {
-                /* On error, reload to reflect true state */
-                window.location.reload();
-            });
+                body: JSON.stringify({ trip_id: TRIP_ID, category: 'all' }),
+            }).then(r => {
+                if (!r.ok) throw new Error();
+                /* If I want check-all (packed=true), individually check each after reset */
+                if (packed) {
+                    return Promise.all(
+                        items.map(row => fetch(CHECK_URL, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCsrf() },
+                            body: JSON.stringify({ item_id: parseInt(row.dataset.itemId), checked: true }),
+                        }))
+                    );
+                }
+            }).catch(() => window.location.reload());
         }
 
         if (btnCheckAll)   btnCheckAll.addEventListener('click',   () => setAllItems(true));

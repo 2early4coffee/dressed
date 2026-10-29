@@ -2,9 +2,8 @@ import os
 import logging
 from flask import Flask, render_template
 
-from app.extensions import db, migrate, csrf
+from app.extensions import db, migrate, csrf , compress
 from config import config
-
 
 def create_app(env: str = None) -> Flask:
 
@@ -24,6 +23,8 @@ def create_app(env: str = None) -> Flask:
 
     app.config.from_object(cfg)
 
+    from whitenoise import WhiteNoise
+    app.wsgi_app = WhiteNoise(app.wsgi_app, root=app.static_folder, prefix="static", max_age=31536000, autorefresh=app.debug)
 
     # Initialise extensions
 
@@ -33,6 +34,8 @@ def create_app(env: str = None) -> Flask:
     migrate.init_app(app, db)
 
     csrf.init_app(app)
+
+    compress.init_app(app)
 
     # Import models
 

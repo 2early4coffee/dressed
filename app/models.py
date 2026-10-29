@@ -467,3 +467,30 @@ class LoginAttempt(db.Model):
     def __repr__(self) -> str:
         result = "ok" if self.success else "fail"
         return f"<LoginAttempt ip={self.ip_address} {result} at={self.attempted_at}>"
+
+# GeoCache
+
+class GeoCache(db.Model):
+
+    __tablename__ = "geo_cache"
+
+    id           : Mapped[int]      = mapped_column(Integer, primary_key=True)
+    query        : Mapped[str]      = mapped_column(String(200), nullable=False, unique=True)
+    lat          : Mapped[float]    = mapped_column(Float, nullable=False)
+    lng          : Mapped[float]    = mapped_column(Float, nullable=False)
+    short_name   : Mapped[str]      = mapped_column(String(200), nullable=False)
+    display_name : Mapped[str]      = mapped_column(Text, nullable=False)
+    fetched_at   : Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_now, nullable=False,
+    )
+
+    __table_args__ = (
+        Index("idx_geo_cache_query", "query"),
+    )
+
+    def is_fresh(self, ttl_seconds: int = 86400 * 30) -> bool:
+        age = datetime.now(timezone.utc) - self.fetched_at
+        return age.total_seconds() < ttl_seconds
+
+    def __repr__(self) -> str:
+        return f"<GeoCache {self.query!r} -> {self.short_name!r}>"

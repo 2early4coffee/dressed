@@ -21,7 +21,7 @@ class BaseConfig:
     SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
     SQLALCHEMY_ENGINE_OPTIONS: dict = {
         "pool_pre_ping": True,
-        "pool_recycle": 300,        # recycle connections every 5 minutes
+        "pool_recycle": 55,        # recycle connections every 55 seconds
         "pool_size": 5,             # max persistent connections in pool
         "max_overflow": 10,         # extra connections allowed above pool_size
         "connect_args": {
@@ -73,7 +73,7 @@ class DevelopmentConfig(BaseConfig):
 
     WTF_CSRF_ENABLED: bool = False
 
-    SQLALCHEMY_ECHO: bool = True
+    SQLALCHEMY_ECHO: bool = False
 
     # Relax cookie security for localhost (HTTP, not HTTPS).
     SESSION_COOKIE_SECURE: bool = False

@@ -713,6 +713,7 @@
 
         const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
         let   _acTimer  = null;
+        let _acController = null;
 
         function attachAutocomplete(input, suggBox) {
             let   focusedIdx = -1;
@@ -752,12 +753,17 @@
 
             function fetchSuggestions(q) {
                 lastQuery = q;
-                /* Query Nominatim for cities/towns only, deduplicated by display name */
+                // Cancel any in-flight request
+                if (_acController) _acController.abort();
+                _acController = new AbortController();
+
                 const url = `${NOMINATIM}?city=${encodeURIComponent(q)}&format=json&addressdetails=1&limit=10&featuretype=city`;
-                fetch(url, { headers: { 'Accept-Language': 'en' } })
+                fetch(url, {
+                    headers: { 'Accept-Language': 'en' },
+                    signal: _acController.signal,
+                })
                     .then(r => r.json())
                     .then(results => {
-                        /* Keep only genuine city/town/suburb entries */
                         const GOOD_TYPES = new Set([
                             'city', 'town', 'municipality', 'borough',
                             'suburb', 'administrative', 'capital',
@@ -768,21 +774,15 @@
                             .filter(r => {
                                 const addr = r.address || {};
                                 const type = r.addresstype || r.type || '';
-                                /* Must be a recognised city-level type */
                                 if (!GOOD_TYPES.has(type) && r.class !== 'place') return false;
-                                /* The matched name must actually contain the query string */
                                 const name = (addr.city || addr.town || addr.suburb || r.name || '').toLowerCase();
                                 return name.includes(qLower);
                             })
-                            /* Sort: exact prefix matches first */
                             .sort((a, b) => {
                                 const na = (a.address?.city || a.address?.town || a.name || '').toLowerCase();
                                 const nb = (b.address?.city || b.address?.town || b.name || '').toLowerCase();
-                                const aStarts = na.startsWith(qLower) ? 0 : 1;
-                                const bStarts = nb.startsWith(qLower) ? 0 : 1;
-                                return aStarts - bStarts;
+                                return (na.startsWith(qLower) ? 0 : 1) - (nb.startsWith(qLower) ? 0 : 1);
                             })
-                            /* Deduplicate by "City, Country" */
                             .filter((r, _i, arr) => {
                                 const addr = r.address || {};
                                 const key  = `${addr.city || addr.town || r.name}|${addr.country}`;
@@ -795,7 +795,9 @@
 
                         renderSuggestions(filtered);
                     })
-                    .catch(() => closeDropdown());
+                    .catch(err => {
+                        if (err.name !== 'AbortError') closeDropdown();
+                    });
             }
 
             function renderSuggestions(results) {

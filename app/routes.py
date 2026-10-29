@@ -642,7 +642,9 @@ def api_forecast():
     for s in signals:
         s["tier"] = get_temp_tier(s["temp_c"], sensitivity)
 
-    return jsonify({"signals": signals, "city": geo["short_name"]})
+    response = make_response(jsonify({"signals": signals, "city": geo["short_name"]}))
+    response.headers["Cache-Control"] = "public, max-age=1800, stale-while-revalidate=600"
+    return response
 
 
 @main.route("/api/geocode", methods=["POST"])

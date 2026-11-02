@@ -1,7 +1,7 @@
 {% extends "layout.html" %}
 
-{% block title %}Sign in{% endblock %}
-{% block meta_description %}Sign in to your Dressed account to access your saved trips and outfit preferences.{% endblock %}
+{% block title %}Create account{% endblock %}
+{% block meta_description %}Create a free Dressed account to save your trips and outfit preferences.{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -96,10 +96,32 @@
     .password-toggle:hover { color: var(--text-secondary); }
     .password-toggle .ti { font-size: 1rem; }
 
-    .form-row-between {
+    .password-hint {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+        margin-top: var(--sp-1);
+        line-height: 1.4;
+    }
+
+    .error-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
         display: flex;
-        align-items: center;
-        justify-content: space-between;
+        flex-direction: column;
+        gap: var(--sp-1);
+    }
+
+    .error-list li {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--sp-2);
+        font-size: 0.875rem;
+    }
+
+    .error-list li .ti {
+        flex-shrink: 0;
+        margin-top: 0.1em;
     }
 </style>
 {% endblock %}
@@ -111,27 +133,31 @@
         {# Header #}
         <div class="auth-header">
             <a href="{{ url_for('main.index') }}" class="auth-logo">dressed<span>.</span></a>
-            <h1 class="auth-title">Welcome back</h1>
-            <p class="auth-subtitle">Sign in to access your trips and preferences</p>
+            <h1 class="auth-title">Create your account</h1>
+            <p class="auth-subtitle">Free forever. No credit card needed.</p>
         </div>
 
         {# Card #}
         <div class="card">
 
-            {# Error message #}
-            {% if error %}
+            {# Validation errors #}
+            {% if errors %}
             <div class="alert alert-error" role="alert" style="margin-bottom:var(--sp-5)">
-                <i class="ti ti-alert-circle" aria-hidden="true"></i>
-                <span>{{ error }}</span>
+                <i class="ti ti-alert-circle" aria-hidden="true" style="flex-shrink:0;margin-top:0.1em"></i>
+                <ul class="error-list">
+                    {% for e in errors %}
+                    <li>{{ e }}</li>
+                    {% endfor %}
+                </ul>
             </div>
             {% endif %}
 
             <form
-                    action="{{ url_for('auth.login_post') }}{% if request.args.get('next') %}?next={{ request.args.get('next') }}{% endif %}"
+                    action="{{ url_for('auth.register_post') }}"
                     method="POST"
                     class="auth-form"
                     novalidate
-                    aria-label="Sign in form"
+                    aria-label="Create account form"
             >
 
                 {# Username #}
@@ -151,27 +177,28 @@
                                 spellcheck="false"
                                 required
                                 aria-required="true"
-                                placeholder="Your username"
+                                placeholder="Choose a username"
                                 autofocus
+                                minlength="3"
+                                maxlength="80"
                         >
                     </div>
+                    <p class="password-hint">Letters, numbers, and underscores only. At least 3 characters.</p>
                 </div>
 
                 {# Password #}
-                <div class="form-group" style="margin-bottom:0">
-                    <div class="form-row-between">
-                        <label class="form-label" for="password">Password</label>
-                    </div>
+                <div class="form-group">
+                    <label class="form-label" for="password">Password</label>
                     <div class="password-input-wrap">
                         <input
                                 class="form-input"
                                 type="password"
                                 id="password"
                                 name="password"
-                                autocomplete="current-password"
+                                autocomplete="new-password"
                                 required
                                 aria-required="true"
-                                placeholder="Your password"
+                                placeholder="Create a password"
                         >
                         <button
                                 type="button"
@@ -182,19 +209,45 @@
                             <i class="ti ti-eye" aria-hidden="true"></i>
                         </button>
                     </div>
+                    <p class="password-hint">At least 8 characters, one number, one special character.</p>
+                </div>
+
+                {# Confirm password #}
+                <div class="form-group" style="margin-bottom:0">
+                    <label class="form-label" for="confirm">Confirm password</label>
+                    <div class="password-input-wrap">
+                        <input
+                                class="form-input"
+                                type="password"
+                                id="confirm"
+                                name="confirm"
+                                autocomplete="new-password"
+                                required
+                                aria-required="true"
+                                placeholder="Repeat your password"
+                        >
+                        <button
+                                type="button"
+                                class="password-toggle"
+                                aria-label="Show confirm password"
+                                id="toggle-confirm"
+                        >
+                            <i class="ti ti-eye" aria-hidden="true"></i>
+                        </button>
+                    </div>
                 </div>
 
                 <button type="submit" class="btn btn-primary btn-block btn-lg">
-                    <i class="ti ti-login" aria-hidden="true"></i>
-                    Sign in
+                    <i class="ti ti-user-plus" aria-hidden="true"></i>
+                    Create account
                 </button>
 
             </form>
         </div>
 
         <div class="auth-footer">
-            Don't have an account?
-            <a href="{{ url_for('auth.register') }}">Sign up — it's free</a>
+            Already have an account?
+            <a href="{{ url_for('auth.login') }}">Sign in</a>
         </div>
 
     </div>
@@ -204,16 +257,32 @@
 {% block scripts %}
 <script>
     (function () {
-        const btn   = document.getElementById('toggle-password');
-        const input = document.getElementById('password');
-        if (!btn || !input) return;
+        function makeToggle(btnId, inputId) {
+            const btn   = document.getElementById(btnId);
+            const input = document.getElementById(inputId);
+            if (!btn || !input) return;
+            btn.addEventListener('click', function () {
+                const show = input.type === 'password';
+                input.type = show ? 'text' : 'password';
+                btn.querySelector('i').className = show ? 'ti ti-eye-off' : 'ti ti-eye';
+                btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+            });
+        }
+        makeToggle('toggle-password', 'password');
+        makeToggle('toggle-confirm',  'confirm');
 
-        btn.addEventListener('click', function () {
-            const show = input.type === 'password';
-            input.type = show ? 'text' : 'password';
-            btn.querySelector('i').className = show ? 'ti ti-eye-off' : 'ti ti-eye';
-            btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
-        });
+        // Client-side confirm-match hint (non-blocking)
+        const pw  = document.getElementById('password');
+        const cfm = document.getElementById('confirm');
+        if (pw && cfm) {
+            cfm.addEventListener('input', function () {
+                if (cfm.value && cfm.value !== pw.value) {
+                    cfm.setCustomValidity('Passwords do not match.');
+                } else {
+                    cfm.setCustomValidity('');
+                }
+            });
+        }
     })();
 </script>
 {% endblock %}

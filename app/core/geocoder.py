@@ -37,7 +37,7 @@ def _nominatim_geocode(
         user_agent: str = DEFAULT_USER_AGENT,
         delay: bool = True,
 ) -> Optional[dict]:
-    """Raw Nominatim lookup -- no caching."""
+    """Raw Nominatim lookup, no caching."""
     if delay:
         time.sleep(REQUEST_DELAY)
 

@@ -29,7 +29,7 @@ class BaseConfig:
         },
     }
 
-      # Session + cookies
+    # Session + cookies
     SESSION_PERMANENT: bool = True
     PERMANENT_SESSION_LIFETIME: timedelta = timedelta(days=30)
 
@@ -57,7 +57,9 @@ class BaseConfig:
     LOGIN_MAX_ATTEMPTS: int = 5
     LOGIN_LOCKOUT_MINUTES: int = 10
 
-    NOMINATIM_USER_AGENT: str = "Dressed/1.0 (walteniumroy@gmail.com)"
+    NOMINATIM_USER_AGENT: str = os.environ.get(
+        "NOMINATIM_USER_AGENT", "Dressed/1.0 (contact@example.com)"
+    )
 
     # Open-Meteo request timeout in seconds.
     WEATHER_REQUEST_TIMEOUT: int = 8

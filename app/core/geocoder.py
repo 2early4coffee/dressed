@@ -4,6 +4,8 @@ import requests
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy import select
+
 logger = logging.getLogger(__name__)
 
 # Constants
@@ -11,10 +13,24 @@ logger = logging.getLogger(__name__)
 NOMINATIM_URL         = "https://nominatim.openstreetmap.org/search"
 NOMINATIM_REVERSE_URL = "https://nominatim.openstreetmap.org/reverse"
 
-DEFAULT_USER_AGENT = "Dressed/1.0 (walteniumroy@gmail.com)"
 REQUEST_TIMEOUT    = 5
 COORD_PRECISION    = 2
 REQUEST_DELAY      = 1.1
+
+
+def _get_user_agent() -> str:
+    """Read the Nominatim user agent from Flask app config at call time."""
+    try:
+        from flask import current_app
+        return current_app.config.get(
+            "NOMINATIM_USER_AGENT", "Dressed/1.0 (contact@example.com)"
+        )
+    except RuntimeError:
+        # Outside app context (e.g. standalone scripts / tests)
+        import os
+        return os.environ.get(
+            "NOMINATIM_USER_AGENT", "Dressed/1.0 (contact@example.com)"
+        )
 
 
 class GeocoderError(Exception):
@@ -34,10 +50,13 @@ def _make_result(lat: float, lng: float, display_name: str, short_name: str = ""
 
 def _nominatim_geocode(
         city_string: str,
-        user_agent: str = DEFAULT_USER_AGENT,
+        user_agent: str = "",
         delay: bool = True,
 ) -> Optional[dict]:
     """Raw Nominatim lookup, no caching."""
+    if not user_agent:
+        user_agent = _get_user_agent()
+
     if delay:
         time.sleep(REQUEST_DELAY)
 
@@ -89,7 +108,7 @@ def _nominatim_geocode(
 
 def geocode(
         city_string: str,
-        user_agent: str = DEFAULT_USER_AGENT,
+        user_agent: str = "",
         delay: bool = True,
 ) -> Optional[dict]:
     """Geocode a city string, using DB cache to avoid repeat Nominatim calls."""
@@ -97,15 +116,20 @@ def geocode(
     if not city_string:
         return None
 
+    if not user_agent:
+        user_agent = _get_user_agent()
+
     key = city_string.lower()
 
     # 1. Check DB cache
     try:
         from app.models import GeoCache
         from app.extensions import db
-        from sqlalchemy.exc import SQLAlchemyError
 
-        cached = GeoCache.query.filter_by(query=key).first()
+        cached = db.session.execute(
+            select(GeoCache).where(GeoCache.query == key)
+        ).scalar_one_or_none()
+
         if cached and cached.is_fresh():
             return {
                 "lat":          cached.lat,
@@ -124,9 +148,11 @@ def geocode(
         try:
             from app.models import GeoCache
             from app.extensions import db
-            from sqlalchemy.exc import SQLAlchemyError
 
-            entry = GeoCache.query.filter_by(query=key).first()
+            entry = db.session.execute(
+                select(GeoCache).where(GeoCache.query == key)
+            ).scalar_one_or_none()
+
             if entry:
                 entry.lat          = result["lat"]
                 entry.lng          = result["lng"]
@@ -156,9 +182,12 @@ def geocode(
 def reverse_geocode(
         lat: float,
         lng: float,
-        user_agent: str = DEFAULT_USER_AGENT,
+        user_agent: str = "",
         delay: bool = True,
 ) -> Optional[dict]:
+    if not user_agent:
+        user_agent = _get_user_agent()
+
     if delay:
         time.sleep(REQUEST_DELAY)
 
@@ -207,8 +236,10 @@ def reverse_geocode(
 
 def geocode_multiple(
         city_strings: list[str],
-        user_agent: str = DEFAULT_USER_AGENT,
+        user_agent: str = "",
 ) -> dict[str, Optional[dict]]:
+    if not user_agent:
+        user_agent = _get_user_agent()
     results = {}
     for i, city in enumerate(city_strings):
         result = geocode(city, user_agent=user_agent, delay=(i > 0))

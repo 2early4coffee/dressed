@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 WEATHERAPI_URL  = "https://api.weatherapi.com/v1/forecast.json"
 REQUEST_TIMEOUT = 8
 
-# WeatherAPI condition code  -> internal slug
+# WeatherAPI condition code -> internal slug
 WEATHERAPI_CODE_MAP: dict[int, str] = {
     1000: "clear",
     1003: "partly_cloudy",
@@ -62,7 +62,7 @@ WEATHERAPI_CODE_MAP: dict[int, str] = {
     1282: "thunderstorm_heavy_hail",
 }
 
-# Condition slug -> emoji
+# Condition slug → emoji
 CONDITION_EMOJI: dict[str, str] = {
     "clear":                   "☀️",
     "mainly_clear":            "🌤",
@@ -229,10 +229,12 @@ def _normalise(data: dict, start_date: date, end_date: date) -> list[dict]:
     days_in_range = [fd for fd in forecastdays if start_str <= fd["date"] <= end_str]
 
     if not days_in_range:
-        raise WeatherFetchError(
-            f"WeatherAPI returned no data for {start_str}–{end_str}. "
-            f"Available dates: {[fd['date'] for fd in forecastdays]}"
+        # WeatherAPI returns dates in the location's local timezone, which can be ahead of UTC (e.g. Japan is UTC+9). Fall back to whatever days the API returned rather than failing entirely.
+        logger.warning(
+            "WeatherAPI date mismatch: requested %s–%s but got %s. Using available data.",
+            start_str, end_str, [fd["date"] for fd in forecastdays],
         )
+        days_in_range = forecastdays
 
     return _normalise_forecastdays(days_in_range)
 

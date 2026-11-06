@@ -1,5 +1,6 @@
 ﻿import uuid
 import logging
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 from typing import Optional
@@ -25,6 +26,11 @@ from app.core.sequence import get_zone_tip
 logger = logging.getLogger(__name__)
 
 main = Blueprint("main", __name__)
+
+# In-flight deduplication: prevents simultaneous requests for the same city
+# from all hitting Open-Meteo at once during a cold start or cache miss.
+_inflight_lock  = threading.Lock()
+_inflight: dict = {}   # cache_key -> threading.Event
 
 
 # Request hooks - session + profile resolution
@@ -106,63 +112,93 @@ def set_anon_cookie(response):
 
 # Helpers
 def _get_or_create_forecast(city: str, lat: float, lng: float, start_date: str, end_date: str) -> Optional[list]:
-    # Fetch a forecast from cache or Open-Meteo.
+    # Fetch a forecast from cache or Open-Meteo, with in-flight deduplication.
     from datetime import date as date_type
     date_range_key = forecast_date_range(
         date_type.fromisoformat(start_date),
         date_type.fromisoformat(end_date),
     )
     cache_key = build_cache_key(city)
-
-    # Check cache
-    cached = ForecastCache.query.filter_by(
-        city=cache_key, date_range=date_range_key
-    ).first()
+    inflight_key = f"{cache_key}:{date_range_key}"
 
     ttl = current_app.config.get("FORECAST_CACHE_TTL_SECONDS", 3600)
 
+    def _read_cache():
+        return ForecastCache.query.filter_by(
+            city=cache_key, date_range=date_range_key
+        ).first()
+
+    # Fast path: serve from fresh cache without touching the inflight dict
+    cached = _read_cache()
     if cached and cached.is_fresh(ttl):
         return _fetch_signals_from_cache_response(cached.response)
 
-    # Fetch from Open-Meteo
-    try:
-        start = date_type.fromisoformat(start_date)
-        end   = date_type.fromisoformat(end_date)
-        signals = fetch_forecast(lat, lng, start, end)
-    except WeatherRateLimitError as e:
-        logger.warning("Weather fetch rate limited for %s: %s", city, e)
-        # Serve stale cache if available, otherwise propagate rate limit
-        if cached:
-            logger.info("Serving stale cache for %s", city)
-            return _fetch_signals_from_cache_response(cached.response)
-        return "rate_limited"
-    except WeatherFetchError as e:
-        logger.warning("Weather fetch failed for %s: %s", city, e)
-        # Serve stale cache if available
-        if cached:
-            logger.info("Serving stale cache for %s", city)
-            return _fetch_signals_from_cache_response(cached.response)
-        return None
-
-    # Store in cache
-    try:
-        if cached:
-            cached.response   = {"signals": signals}
-            cached.fetched_at  = datetime.now(timezone.utc)
+    # Deduplication: if another thread is already fetching this key, wait for it
+    with _inflight_lock:
+        if inflight_key in _inflight:
+            event = _inflight[inflight_key]
+            leader = False
         else:
-            new_cache = ForecastCache(
-                city       = cache_key,
-                lat        = lat,
-                lng        = lng,
-                date_range = date_range_key,
-                response   = {"signals": signals},
-            )
-            db.session.add(new_cache)
-        db.session.commit()
-    except SQLAlchemyError:
-        db.session.rollback()
+            event = threading.Event()
+            _inflight[inflight_key] = event
+            leader = True
 
-    return signals
+    if not leader:
+        # Wait up to 10s for the leader to finish, then re-read cache
+        event.wait(timeout=10)
+        cached = _read_cache()
+        if cached:
+            try:
+                return _fetch_signals_from_cache_response(cached.response)
+            except (ValueError, KeyError):
+                pass
+        return "rate_limited"   # leader failed; signal busy to this waiter too
+
+    # We are the leader: do the actual fetch
+    try:
+        # Fetch from Open-Meteo
+        try:
+            start = date_type.fromisoformat(start_date)
+            end   = date_type.fromisoformat(end_date)
+            signals = fetch_forecast(lat, lng, start, end)
+        except WeatherRateLimitError as e:
+            logger.warning("Weather fetch rate limited for %s: %s", city, e)
+            if cached:
+                logger.info("Serving stale cache for %s", city)
+                return _fetch_signals_from_cache_response(cached.response)
+            return "rate_limited"
+        except WeatherFetchError as e:
+            logger.warning("Weather fetch failed for %s: %s", city, e)
+            if cached:
+                logger.info("Serving stale cache for %s", city)
+                return _fetch_signals_from_cache_response(cached.response)
+            return None
+
+        # Store in cache
+        try:
+            cached = _read_cache()   # re-read in case another worker beat us
+            if cached:
+                cached.response   = {"signals": signals}
+                cached.fetched_at = datetime.now(timezone.utc)
+            else:
+                new_cache = ForecastCache(
+                    city       = cache_key,
+                    lat        = lat,
+                    lng        = lng,
+                    date_range = date_range_key,
+                    response   = {"signals": signals},
+                )
+                db.session.add(new_cache)
+            db.session.commit()
+        except SQLAlchemyError:
+            db.session.rollback()
+
+        return signals
+    finally:
+        # Always release waiting threads
+        with _inflight_lock:
+            _inflight.pop(inflight_key, None)
+        event.set()
 
 
 def _fetch_signals_from_cache_response(response: dict) -> list:

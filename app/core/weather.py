@@ -1,6 +1,10 @@
+import time
+import logging
 import requests
 from datetime import date, timedelta
 from typing import Optional
+
+logger = logging.getLogger(__name__)
 
 # Constants
 
@@ -86,10 +90,18 @@ CONDITION_EMOJI = {
     "thunderstorm_heavy_hail":"⛈",
 }
 
-# Custom exception
+# Custom exceptions
 
 class WeatherFetchError(Exception):
     pass
+
+class WeatherRateLimitError(WeatherFetchError):
+    """Open-Meteo returned 429 Too Many Requests."""
+    pass
+
+# Retry settings for transient 429 errors
+_MAX_RETRIES   = 3
+_RETRY_DELAYS  = (1, 2, 4)  # seconds between attempts
 
 # Public API
 def fetch_forecast(
@@ -101,25 +113,46 @@ def fetch_forecast(
 ) -> list[dict]:
     params = _build_params(lat, lng, start_date, end_date, timezone)
 
-    try:
-        response = requests.get(
-            OPEN_METEO_URL,
-            params=params,
-            timeout=REQUEST_TIMEOUT,
-        )
-        response.raise_for_status()
-    except requests.exceptions.Timeout:
-        raise WeatherFetchError(
-            f"Open-Meteo request timed out after {REQUEST_TIMEOUT}s "
-            f"for ({lat}, {lng}) {start_date}–{end_date}"
-        )
-    except requests.exceptions.ConnectionError:
-        raise WeatherFetchError(
-            "Could not connect to Open-Meteo API. Check network connectivity."
-        )
-    except requests.exceptions.HTTPError as e:
-        raise WeatherFetchError(
-            f"Open-Meteo returned HTTP {response.status_code}: {e}"
+    last_exc: Exception = Exception("unknown")
+    for attempt in range(_MAX_RETRIES):
+        try:
+            response = requests.get(
+                OPEN_METEO_URL,
+                params=params,
+                timeout=REQUEST_TIMEOUT,
+            )
+            response.raise_for_status()
+            break  # success
+        except requests.exceptions.Timeout:
+            raise WeatherFetchError(
+                f"Open-Meteo request timed out after {REQUEST_TIMEOUT}s "
+                f"for ({lat}, {lng}) {start_date}–{end_date}"
+            )
+        except requests.exceptions.ConnectionError:
+            raise WeatherFetchError(
+                "Could not connect to Open-Meteo API. Check network connectivity."
+            )
+        except requests.exceptions.HTTPError as e:
+            if response.status_code == 429:
+                if attempt < _MAX_RETRIES - 1:
+                    delay = _RETRY_DELAYS[attempt]
+                    logger.warning(
+                        "Open-Meteo rate limited (attempt %d/%d), retrying in %ds",
+                        attempt + 1, _MAX_RETRIES, delay,
+                    )
+                    time.sleep(delay)
+                    last_exc = e
+                    continue
+                raise WeatherRateLimitError(
+                    f"Open-Meteo returned HTTP 429: {e}"
+                )
+            raise WeatherFetchError(
+                f"Open-Meteo returned HTTP {response.status_code}: {e}"
+            )
+    else:
+        # All retries exhausted on 429
+        raise WeatherRateLimitError(
+            f"Open-Meteo rate limited after {_MAX_RETRIES} attempts: {last_exc}"
         )
 
     try:

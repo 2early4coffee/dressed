@@ -17,7 +17,7 @@ from app.models import (
     PackingItem, ForecastCache, Feedback, LoginAttempt,
 )
 from app.core import packing as packing_ops
-from app.core.weather import fetch_forecast, get_dominant_signal, WeatherFetchError, signals_from_cache, forecast_date_range
+from app.core.weather import fetch_forecast, get_dominant_signal, WeatherFetchError, WeatherRateLimitError, signals_from_cache, forecast_date_range
 from app.core.geocoder import geocode, geocode_multiple, build_cache_key, extract_country, reverse_geocode
 from app.core.advisor import get_outfit, build_packing_list, DEFAULT_PROFILE
 from app.core.sequence import get_zone_tip
@@ -129,6 +129,13 @@ def _get_or_create_forecast(city: str, lat: float, lng: float, start_date: str, 
         start = date_type.fromisoformat(start_date)
         end   = date_type.fromisoformat(end_date)
         signals = fetch_forecast(lat, lng, start, end)
+    except WeatherRateLimitError as e:
+        logger.warning("Weather fetch rate limited for %s: %s", city, e)
+        # Serve stale cache if available, otherwise propagate rate limit
+        if cached:
+            logger.info("Serving stale cache for %s", city)
+            return _fetch_signals_from_cache_response(cached.response)
+        return "rate_limited"
     except WeatherFetchError as e:
         logger.warning("Weather fetch failed for %s: %s", city, e)
         # Serve stale cache if available
@@ -585,8 +592,10 @@ def api_outfit():
         end_date   = start_date_only,
     )
 
+    if signals == "rate_limited":
+        return jsonify({"error": "Weather service is busy. Please try again in a moment.", "code": "rate_limited"}), 503
     if not signals:
-        return jsonify({"error": "Could not fetch weather for this location."}), 503
+        return jsonify({"error": "Could not fetch weather for this location.", "code": "unavailable"}), 503
 
     signal  = signals[0]
     outfit  = get_outfit(signal, g.profile_dict)
@@ -633,8 +642,10 @@ def api_forecast():
         end_date   = end_date,
     )
 
+    if signals == "rate_limited":
+        return jsonify({"error": "Weather service is busy. Please try again in a moment.", "code": "rate_limited"}), 503
     if not signals:
-        return jsonify({"error": "Could not fetch forecast."}), 503
+        return jsonify({"error": "Could not fetch forecast.", "code": "unavailable"}), 503
 
     # Add outfit tier to each signal for the strip UI
     sensitivity = g.profile_dict.get("temp_sensitivity", "neutral")
@@ -663,6 +674,67 @@ def api_geocode():
         return jsonify({"error": f"City not found: {city}"}), 404
 
     return jsonify(geo)
+
+
+@main.route("/api/geocode/suggest", methods=["GET"])
+def api_geocode_suggest():
+    """Typeahead suggestions: returns up to 5 place names for the given query."""
+    q = request.args.get("q", "").strip()
+    if len(q) < 2:
+        return jsonify([])
+
+    import time as _time
+    from app.core.geocoder import _get_user_agent, REQUEST_TIMEOUT, NOMINATIM_URL, _make_result
+
+    user_agent = _get_user_agent()
+    _time.sleep(0.3)  # Nominatim rate-limit courtesy delay
+
+    params = {
+        "q":              q,
+        "format":         "json",
+        "limit":          5,
+        "addressdetails": 1,
+        "accept-language": request.accept_languages.best or "en",
+    }
+    headers = {"User-Agent": user_agent, "Accept": "application/json"}
+
+    try:
+        resp = requests.get(
+            NOMINATIM_URL,
+            params=params,
+            headers=headers,
+            timeout=REQUEST_TIMEOUT,
+        )
+        resp.raise_for_status()
+        results = resp.json()
+    except Exception:
+        return jsonify([])
+
+    suggestions = []
+    for item in results:
+        try:
+            address = item.get("address", {})
+            # Build a human-readable label: city/town + country
+            city_part = (
+                address.get("city")
+                or address.get("town")
+                or address.get("village")
+                or address.get("municipality")
+                or address.get("county")
+                or item.get("display_name", "").split(",")[0].strip()
+            )
+            country = address.get("country", "")
+            label = f"{city_part}, {country}" if country else city_part
+
+            suggestions.append({
+                "label": label,
+                "lat":   round(float(item["lat"]), 2),
+                "lng":   round(float(item["lon"]), 2),
+            })
+        except (KeyError, ValueError):
+            continue
+
+    return jsonify(suggestions)
 
 
 @main.route("/api/packing/check", methods=["POST"])

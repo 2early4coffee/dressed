@@ -139,7 +139,7 @@ def fetch_forecast(
                     logger.warning(
                         "Open-Meteo rate limited (attempt %d/%d), retrying in %ds",
                         attempt + 1, _MAX_RETRIES, delay,
-                    )
+                        )
                     time.sleep(delay)
                     last_exc = e
                     continue

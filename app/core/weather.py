@@ -62,7 +62,7 @@ WEATHERAPI_CODE_MAP: dict[int, str] = {
     1282: "thunderstorm_heavy_hail",
 }
 
-# Condition slug → emoji
+# Condition slug -> emoji
 CONDITION_EMOJI: dict[str, str] = {
     "clear":                   "☀️",
     "mainly_clear":            "🌤",

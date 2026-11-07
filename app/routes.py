@@ -606,11 +606,12 @@ def api_outfit():
     if lat is None or lng is None:
         if not city:
             return jsonify({"error": "Provide lat/lng or city."}), 400
+        original_city = city
         geo = geocode(city)
         if geo is None:
             return jsonify({"error": f"City not found: {city}"}), 404
         lat, lng = geo["lat"], geo["lng"]
-        city     = geo["short_name"]
+        city     = original_city
     else:
         # Browser geolocation: reverse-geocode coords to get a real city name
         if not city:

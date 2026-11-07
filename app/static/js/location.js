@@ -98,9 +98,9 @@
     function selectAc(idx) {
         const s = acItems[idx];
         if (!s) return;
+        acJustSelected = true;
         closeAc();
         if (cityInput) cityInput.value = s.label;
-        acJustSelected = true;
         loadOutfitForCity(s.label, s.label);
     }
 
@@ -178,10 +178,10 @@
             let lastLoaded = cityInput.value.trim();
 
             cityInput.addEventListener('keydown', function (e) {
-                if (e.key === 'Enter') {
+                if (e.key === 'Enter' && (!acList || acList.style.display === 'none')) {
                     e.preventDefault();
                     const city = cityInput.value.trim();
-                    if (city) {
+                    if (city && city !== lastLoaded) {
                         lastLoaded = city;
                         loadOutfitForCity(city);
                     }

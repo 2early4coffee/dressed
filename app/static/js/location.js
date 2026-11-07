@@ -213,7 +213,7 @@
 
             if (cityInput) cityInput.value = displayLabel || data.city_name || city;
             window.renderOutfit      && window.renderOutfit(data);
-            window.loadForecastStrip && window.loadForecastStrip(data.city_name || city);
+            window.loadForecastStrip && window.loadForecastStrip(displayLabel || data.city_name || city);
 
         } catch (err) {
             showWeatherError(err.code);

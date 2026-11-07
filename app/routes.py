@@ -717,19 +717,26 @@ def api_geocode():
 
 @main.route("/api/geocode/suggest", methods=["GET"])
 def api_geocode_suggest():
-    """Typeahead suggestions using WeatherAPI search."""
+    """Typeahead suggestions: returns up to 5 place names for the given query."""
     q = request.args.get("q", "").strip()
     if len(q) < 2:
         return jsonify([])
 
-    api_key = current_app.config.get("WEATHER_API_KEY") or os.environ.get("WEATHER_API_KEY", "")
+    import os
+    api_key = os.environ.get("WEATHER_API_KEY", "")
     if not api_key:
         return jsonify([])
+
+    params = {
+        "key":  api_key,
+        "q":    q,
+        "lang": "en",
+    }
 
     try:
         resp = requests.get(
             "https://api.weatherapi.com/v1/search.json",
-            params={"key": api_key, "q": q, "lang": "en"},
+            params=params,
             timeout=5,
         )
         resp.raise_for_status()
@@ -740,9 +747,7 @@ def api_geocode_suggest():
     suggestions = []
     for item in results[:5]:
         try:
-            city    = item.get("name", "")
-            country = item.get("country", "")
-            label   = f"{city}, {country}" if country else city
+            label = f"{item['name']}, {item['country']}"
             suggestions.append({
                 "label": label,
                 "lat":   round(float(item["lat"]), 2),
@@ -752,31 +757,6 @@ def api_geocode_suggest():
             continue
 
     return jsonify(suggestions)
-
-
-@main.route("/api/packing/check", methods=["POST"])
-def api_packing_check():
-    data     = request.get_json(silent=True) or {}
-    item_id  = data.get("item_id")
-    checked  = bool(data.get("checked", False))
-
-    if item_id is None:
-        return jsonify({"error": "item_id required."}), 400
-
-    # Get the item to verify trip ownership
-    item = PackingItem.query.get(item_id)
-    if item is None:
-        return jsonify({"error": "Item not found."}), 404
-
-    if not packing_ops.verify_trip_owner(item.trip_id, g.user_id, g.session_token):
-        abort(403)
-
-    result = packing_ops.toggle_checked(item_id, item.trip_id, checked)
-    if result is None:
-        return jsonify({"error": "Item not found."}), 404
-
-    return jsonify(result)
-
 
 @main.route("/api/packing/quantity", methods=["POST"])
 def api_packing_quantity():

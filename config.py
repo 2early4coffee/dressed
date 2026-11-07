@@ -57,9 +57,7 @@ class BaseConfig:
     LOGIN_MAX_ATTEMPTS: int = 5
     LOGIN_LOCKOUT_MINUTES: int = 10
 
-    NOMINATIM_USER_AGENT: str = os.environ.get(
-        "NOMINATIM_USER_AGENT", "Dressed/1.0 (contact@example.com)"
-    )
+    NOMINATIM_USER_AGENT: str = os.environ.get("NOMINATIM_USER_AGENT", "Dressed/1.0")
 
     # Open-Meteo request timeout in seconds.
     WEATHER_REQUEST_TIMEOUT: int = 8

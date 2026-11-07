@@ -10,7 +10,7 @@
     let acItems      = [];     // current suggestion objects
     let acIndex      = -1;     // keyboard-highlighted index
     let acDebounce   = null;
-    let acLastQuery  = false;
+    let acLastQuery  = '';
     let acJustSelected = false;
 
     function buildAcList() {

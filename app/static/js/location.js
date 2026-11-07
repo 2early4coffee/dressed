@@ -12,6 +12,7 @@
     let acDebounce   = null;
     let acLastQuery  = '';
     let acJustSelected = false;
+    let outfitInFlight = false;
 
     function buildAcList() {
         if (acList) return;
@@ -162,8 +163,6 @@
 
         if (prefilledCity) {
             loadOutfitForCity(prefilledCity);
-        } else {
-            locateAndLoad();
         }
 
         // Locate-me button
@@ -202,6 +201,8 @@
     // Load outfit by city name
 
     async function loadOutfitForCity(city, displayLabel) {
+        if (outfitInFlight) return;
+        outfitInFlight = true;
         showWeatherLoading();
         showOutfitLoading();
 
@@ -218,6 +219,8 @@
         } catch (err) {
             showWeatherError(err.code);
             console.error('Outfit load failed:', err.message);
+        } finally {
+            outfitInFlight = false;
         }
     }
 

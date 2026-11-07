@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 main = Blueprint("main", __name__)
 
+
 # In-flight deduplication: prevents simultaneous requests for the same city from all hitting Open-Meteo at once during a cold start or cache miss.
 _inflight_lock  = threading.Lock()
 _inflight: dict = {}   # cache_key -> threading.Event

@@ -4,7 +4,7 @@
     const cityInput = document.getElementById('city-input');
     const locateBtn = document.getElementById('locate-btn');
 
-    // ── Autocomplete ──────────────────────────────────────────────────────────
+    // Autocomplete
 
     let acList       = null;   // the dropdown <ul>
     let acItems      = [];     // current suggestion objects
@@ -99,7 +99,7 @@
         if (!s) return;
         closeAc();
         if (cityInput) cityInput.value = s.label;
-        loadOutfitForCity(s.label);
+        loadOutfitForCity(s.label, s.label);
     }
 
     async function fetchSuggestions(q) {
@@ -198,7 +198,7 @@
 
     // Load outfit by city name
 
-    async function loadOutfitForCity(city) {
+    async function loadOutfitForCity(city, displayLabel) {
         showWeatherLoading();
         showOutfitLoading();
 
@@ -208,7 +208,7 @@
                 body:   { city },
             });
 
-            if (cityInput) cityInput.value = data.city_name || city;
+            if (cityInput) cityInput.value = displayLabel || data.city_name || city;
             window.renderOutfit      && window.renderOutfit(data);
             window.loadForecastStrip && window.loadForecastStrip(data.city_name || city);
 

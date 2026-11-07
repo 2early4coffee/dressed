@@ -1,10 +1,12 @@
-﻿import uuid
+﻿import os
+import uuid
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+import requests
 from flask import (
     Blueprint, render_template, request, session,
     redirect, url_for, jsonify, make_response, g,
@@ -27,8 +29,7 @@ logger = logging.getLogger(__name__)
 
 main = Blueprint("main", __name__)
 
-# In-flight deduplication: prevents simultaneous requests for the same city
-# from all hitting Open-Meteo at once during a cold start or cache miss.
+# In-flight deduplication: prevents simultaneous requests for the same city from all hitting Open-Meteo at once during a cold start or cache miss.
 _inflight_lock  = threading.Lock()
 _inflight: dict = {}   # cache_key -> threading.Event
 
@@ -714,32 +715,20 @@ def api_geocode():
 
 @main.route("/api/geocode/suggest", methods=["GET"])
 def api_geocode_suggest():
-    """Typeahead suggestions: returns up to 5 place names for the given query."""
+    """Typeahead suggestions using WeatherAPI search."""
     q = request.args.get("q", "").strip()
     if len(q) < 2:
         return jsonify([])
 
-    import time as _time
-    from app.core.geocoder import _get_user_agent, REQUEST_TIMEOUT, NOMINATIM_URL, _make_result
-
-    user_agent = _get_user_agent()
-    _time.sleep(0.3)  # Nominatim rate-limit courtesy delay
-
-    params = {
-        "q":              q,
-        "format":         "json",
-        "limit":          5,
-        "addressdetails": 1,
-        "accept-language": request.accept_languages.best or "en",
-    }
-    headers = {"User-Agent": user_agent, "Accept": "application/json"}
+    api_key = current_app.config.get("WEATHER_API_KEY") or os.environ.get("WEATHER_API_KEY", "")
+    if not api_key:
+        return jsonify([])
 
     try:
         resp = requests.get(
-            NOMINATIM_URL,
-            params=params,
-            headers=headers,
-            timeout=REQUEST_TIMEOUT,
+            "https://api.weatherapi.com/v1/search.json",
+            params={"key": api_key, "q": q},
+            timeout=5,
         )
         resp.raise_for_status()
         results = resp.json()
@@ -747,21 +736,11 @@ def api_geocode_suggest():
         return jsonify([])
 
     suggestions = []
-    for item in results:
+    for item in results[:5]:
         try:
-            address = item.get("address", {})
-            # Build a human-readable label: city/town + country
-            city_part = (
-                address.get("city")
-                or address.get("town")
-                or address.get("village")
-                or address.get("municipality")
-                or address.get("county")
-                or item.get("display_name", "").split(",")[0].strip()
-            )
-            country = address.get("country", "")
-            label = f"{city_part}, {country}" if country else city_part
-
+            city    = item.get("name", "")
+            country = item.get("country", "")
+            label   = f"{city}, {country}" if country else city
             suggestions.append({
                 "label": label,
                 "lat":   round(float(item["lat"]), 2),

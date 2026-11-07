@@ -727,7 +727,7 @@ def api_geocode_suggest():
     try:
         resp = requests.get(
             "https://api.weatherapi.com/v1/search.json",
-            params={"key": api_key, "q": q},
+            params={"key": api_key, "q": q, "lang": "en"},
             timeout=5,
         )
         resp.raise_for_status()

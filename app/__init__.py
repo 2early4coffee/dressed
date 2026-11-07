@@ -30,6 +30,8 @@ def create_app(env: str = None) -> Flask:
 
     db.init_app(app)
 
+
+
     # Bind Migrate to both the app and db so `flask db` commands work.
     migrate.init_app(app, db)
 
@@ -55,11 +57,12 @@ def create_app(env: str = None) -> Flask:
     _register_error_handlers(app)
 
     # Configure logging
-
     _configure_logging(app)
 
-    # Shell context
 
+    logging.getLogger('urllib3').setLevel(logging.WARNING)
+
+    # Shell context
     @app.shell_context_processor
     def make_shell_context() -> dict:
         from app.models import (

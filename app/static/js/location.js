@@ -10,7 +10,8 @@
     let acItems      = [];     // current suggestion objects
     let acIndex      = -1;     // keyboard-highlighted index
     let acDebounce   = null;
-    let acLastQuery  = '';
+    let acLastQuery  = false;
+    let acJustSelected = false;
 
     function buildAcList() {
         if (acList) return;
@@ -99,6 +100,7 @@
         if (!s) return;
         closeAc();
         if (cityInput) cityInput.value = s.label;
+        acJustSelected = true;
         loadOutfitForCity(s.label, s.label);
     }
 
@@ -187,6 +189,7 @@
             });
 
             cityInput.addEventListener('blur', function () {
+                if (acJustSelected) { acJustSelected = false; return; }
                 const city = cityInput.value.trim();
                 if (city && city !== lastLoaded) {
                     lastLoaded = city;

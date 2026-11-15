@@ -155,14 +155,14 @@ def fetch_forecast(
                     time.sleep(delay)
                     last_exc = e
                     continue
-                raise WeatherRateLimitError(f"WeatherAPI returned HTTP 429: {e}")
+                raise WeatherRateLimitError("WeatherAPI returned HTTP 429")
             raise WeatherFetchError(
                 f"WeatherAPI returned HTTP "
-                f"{response.status_code if response is not None else '?'}: {e}"
+                f"{response.status_code if response is not None else '?'}"
             )
     else:
         raise WeatherRateLimitError(
-            f"WeatherAPI rate limited after {_MAX_RETRIES} attempts: {last_exc}"
+            f"WeatherAPI rate limited after {_MAX_RETRIES} attempts"
         )
 
     try:

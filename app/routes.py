@@ -325,7 +325,7 @@ def trip_create():
     db.session.add(new_trip)
     db.session.flush()
 
-    # ── Geocode + forecast per leg (parallel) ────────────────────────────────
+    # ─ Geocode + forecast per leg (parallel)
     leg_instances = []
     leg_dicts     = []
 
@@ -369,11 +369,17 @@ def trip_create():
             "end_date":      end_date,
         }, None
 
+    app = current_app._get_current_object()
+
+    def _process_leg_in_context(order: int, leg_raw: dict):
+        with app.app_context():
+            return _process_leg(order, leg_raw)
+
     # Run all legs in parallel (cap at 6 workers; typical trips have 1-3 legs)
     ordered_results = {}
     with ThreadPoolExecutor(max_workers=min(len(legs_raw), 6)) as pool:
         futures = {
-            pool.submit(_process_leg, order, leg_raw): order
+            pool.submit(_process_leg_in_context, order, leg_raw): order
             for order, leg_raw in enumerate(legs_raw, start=1)
         }
         for future in as_completed(futures):
@@ -757,6 +763,29 @@ def api_geocode_suggest():
             continue
 
     return jsonify(suggestions)
+
+@main.route("/api/packing/check", methods=["POST"])
+def api_packing_check():
+    data     = request.get_json(silent=True) or {}
+    item_id  = data.get("item_id")
+    checked  = bool(data.get("checked", False))
+
+    if item_id is None:
+        return jsonify({"error": "item_id required."}), 400
+
+    # Get the item to verify trip ownership
+    item = PackingItem.query.get(item_id)
+    if item is None:
+        return jsonify({"error": "Item not found."}), 404
+
+    if not packing_ops.verify_trip_owner(item.trip_id, g.user_id, g.session_token):
+        abort(403)
+
+    result = packing_ops.toggle_checked(item_id, item.trip_id, checked)
+    if result is None:
+        return jsonify({"error": "Item not found."}), 404
+
+    return jsonify(result)
 
 @main.route("/api/packing/quantity", methods=["POST"])
 def api_packing_quantity():

@@ -227,6 +227,26 @@ class Trip(db.Model):
     def total_count(self) -> int:
         return len(self.packing_items)
 
+    @property
+    def start_date(self):
+        from datetime import date as date_type
+        if not self.legs:
+            return None
+        return min(date_type.fromisoformat(l.start_date) for l in self.legs)
+
+    @property
+    def end_date(self):
+        from datetime import date as date_type
+        if not self.legs:
+            return None
+        return max(date_type.fromisoformat(l.end_date) for l in self.legs)
+
+    @property
+    def nights(self) -> int:
+        if not self.legs:
+            return 0
+        return (self.end_date - self.start_date).days
+
     def to_config_dict(self) -> dict:
         return {
             "trip_mode":       self.trip_mode,

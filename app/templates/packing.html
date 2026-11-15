@@ -320,7 +320,7 @@
 
     {# ── Progress bar ── #}
     {% set total_items = items | length %}
-    {% set checked_count = items | selectattr('packed') | list | length %}
+    {% set checked_count = items | selectattr('is_checked') | list | length %}
     {% set pct = ((checked_count / total_items * 100) | int) if total_items > 0 else 0 %}
 
     <div class="packing-progress {% if pct == 100 %}progress-complete{% endif %}" id="progress-bar-wrap">
@@ -390,53 +390,39 @@
     <div class="card packing-section" data-category="{{ category }}">
         <div class="packing-section-header">
             <span class="packing-section-title">
-              {% if category == 'clothing' %}
-                <i class="ti ti-shirt" aria-hidden="true"></i> Clothing
-              {% elif category == 'footwear' %}
-                <i class="ti ti-shoe" aria-hidden="true"></i> Footwear
-              {% elif category == 'toiletries' %}
-                <i class="ti ti-droplet" aria-hidden="true"></i> Toiletries
-              {% elif category == 'documents' %}
-                <i class="ti ti-file-text" aria-hidden="true"></i> Documents
-              {% elif category == 'electronics' %}
-                <i class="ti ti-device-mobile" aria-hidden="true"></i> Electronics
-              {% elif category == 'health' %}
-                <i class="ti ti-first-aid-kit" aria-hidden="true"></i> Health &amp; meds
-              {% elif category == 'activities' %}
-                <i class="ti ti-run" aria-hidden="true"></i> Activities
-              {% elif category == 'money' %}
-                <i class="ti ti-wallet" aria-hidden="true"></i> Money &amp; cards
-              {% else %}
-                <i class="ti ti-package" aria-hidden="true"></i>
-                {{ category | replace('_', ' ') | title }}
-              {% endif %}
+              {% set cat_icons = {
+                'tops': 'ti-shirt', 'bottoms': 'ti-hanger', 'layers': 'ti-jacket',
+                'shoes': 'ti-shoe', 'activity': 'ti-run', 'extras': 'ti-backpack'
+              } %}
+              <i class="ti {{ cat_icons.get(category, 'ti-package') }}" aria-hidden="true"></i>
+              {{ category | replace('_', ' ') | title }}
             </span>
             <span class="section-badge">
-              <span class="section-checked">{{ cat_items | selectattr('packed') | list | length }}</span>/<span>{{ cat_items | length }}</span>
+              <span class="section-checked">{{ cat_items | selectattr('is_checked') | list | length }}</span>/<span>{{ cat_items | length }}</span>
             </span>
         </div>
 
         {% for item in cat_items %}
-        <div class="packing-item {% if item.packed %}is-checked{% endif %}"
+        <div class="packing-item {% if item.is_checked %}is-checked{% endif %}"
              data-item-id="{{ item.id }}"
              onclick="toggleItem(this)">
             <input
                     type="checkbox"
                     id="item-{{ item.id }}"
                     name="item-{{ item.id }}"
-                    {% if item.packed %}checked{% endif %}
-                    aria-label="{{ item.name }}"
+                    {% if item.is_checked %}checked{% endif %}
+                    aria-label="{{ item.item_name }}"
                     onclick="event.stopPropagation()"
                     onchange="toggleItem(this.closest('.packing-item'))"
             >
             <div class="packing-item-body">
-                <div class="packing-item-name">{{ item.name }}</div>
-                {% if item.notes %}
-                <div class="packing-item-hint">{{ item.notes }}</div>
+                <div class="packing-item-name">{{ item.item_name }}</div>
+                {% if item.note %}
+                <div class="packing-item-hint">{{ item.note }}</div>
                 {% endif %}
             </div>
-            {% if item.quantity and item.quantity > 1 %}
-            <span class="packing-item-qty">× {{ item.quantity }}</span>
+            {% if item.display_quantity and item.display_quantity > 1 %}
+            <span class="packing-item-qty">× {{ item.display_quantity }}</span>
             {% endif %}
         </div>
         {% endfor %}

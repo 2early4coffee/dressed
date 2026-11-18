@@ -499,7 +499,28 @@
         .forecast-day { padding: 0.6rem 0.1rem; }
         .day-name   { font-size: 0.6rem; }
     }
+    /* First-visit welcome card and locate messages */
+    .index-page [hidden] { display: none !important; }
+
+    .weather-welcome { text-align: center; padding: var(--sp-8) var(--sp-4); }
+    .weather-welcome > .ti { font-size: 2.5rem; color: var(--green-600); display: block; margin-bottom: var(--sp-3); }
+    .weather-welcome h2 { font-size: 1.25rem; font-weight: 700; color: var(--text-primary); margin-bottom: var(--sp-2); }
+    .weather-welcome p { font-size: 0.9rem; color: var(--text-muted); margin-bottom: var(--sp-5); }
+    .welcome-actions { display: flex; gap: var(--sp-2); justify-content: center; flex-wrap: wrap; }
+
+    .locate-msg {
+        margin: calc(-1 * var(--sp-4)) 0 var(--sp-6);
+        padding: var(--sp-3) var(--sp-4);
+        border-radius: var(--r-md);
+        background: var(--surface);
+        border: 1px solid var(--border);
+        font-size: 0.875rem;
+        color: var(--text-secondary);
+    }
+
+    .items-idle { font-size: 0.875rem; color: var(--text-muted); }
 </style>
+
 {% endblock %}
 
 {% block content %}
@@ -535,6 +556,9 @@
         <span class="date-chip" aria-label="Today's date" id="date-display"></span>
     </div>
 
+    {# Locate problems (blocked, timeout...) shown here by location.js #}
+    <div id="locate-msg" class="locate-msg" role="status" hidden></div>
+
     {# Two-column grid #}
     <div class="home-grid">
 
@@ -543,6 +567,21 @@
 
             {# Weather card that is populated by outfit.js #}
             <div class="card weather-card" id="weather-card" aria-live="polite" aria-label="Current weather">
+
+                {# First-visit welcome (shown by location.js when no city is saved) #}
+                <div id="weather-welcome" class="weather-welcome" hidden>
+                    <i class="ti ti-map-2" aria-hidden="true"></i>
+                    <h2>Where are you today?</h2>
+                    <p>Share your location or pick a city, and we'll tell you what to wear.</p>
+                    <div class="welcome-actions">
+                        <button class="btn btn-primary" id="welcome-locate-btn" type="button">
+                            <i class="ti ti-current-location" aria-hidden="true"></i> Use my location
+                        </button>
+                        <button class="btn btn-secondary" id="welcome-type-btn" type="button">
+                            <i class="ti ti-search" aria-hidden="true"></i> Type a city instead
+                        </button>
+                    </div>
+                </div>
 
                 {# Loading skeleton (shown until JS loads data) #}
                 <div id="weather-skeleton">
@@ -695,6 +734,8 @@
                     {% endfor %}
                 </div>
 
+                <p id="items-idle" class="items-idle" hidden>Pick a city to see what to wear.</p>
+
                 <ul class="item-list" id="item-list" role="list" aria-label="Clothing items list" hidden>
                     {# Populated by outfit.js #}
                 </ul>
@@ -707,7 +748,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/location.js') }}?v=8" defer></script>
+<script src="{{ url_for('static', filename='js/location.js') }}?v=9" defer></script>
 <script src="{{ url_for('static', filename='js/outfit.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/forecast-strip.js') }}" defer></script>
 <script>
@@ -724,6 +765,7 @@
     const retryBtn = document.getElementById('retry-btn');
     if (retryBtn) {
         retryBtn.addEventListener('click', function () {
+            const cityInput = document.getElementById('city-input');
             const city = cityInput ? cityInput.value.trim() : '';
             if (city) {
                 window.loadOutfitForCity && window.loadOutfitForCity(city);

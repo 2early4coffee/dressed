@@ -23,13 +23,13 @@ def _get_user_agent() -> str:
     try:
         from flask import current_app
         return current_app.config.get(
-            "NOMINATIM_USER_AGENT", "Dressed/1.0 (contact@example.com)"
+            "NOMINATIM_USER_AGENT", "Dressed/1.0"
         )
     except RuntimeError:
         # Outside app context (e.g. standalone scripts / tests)
         import os
         return os.environ.get(
-            "NOMINATIM_USER_AGENT", "Dressed/1.0 (contact@example.com)"
+            "NOMINATIM_USER_AGENT", "Dressed/1.0"
         )
 
 
@@ -65,6 +65,7 @@ def _nominatim_geocode(
         "format":         "json",
         "limit":          1,
         "addressdetails": 0,
+        "accept-language": "en",
     }
     headers = {"User-Agent": user_agent, "Accept": "application/json"}
 
@@ -197,6 +198,7 @@ def reverse_geocode(
         "format":         "json",
         "zoom":           10,
         "addressdetails": 1,
+        "accept-language": "en",
     }
     headers = {"User-Agent": user_agent, "Accept": "application/json"}
 

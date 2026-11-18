@@ -4,15 +4,17 @@
     const cityInput = document.getElementById('city-input');
     const locateBtn = document.getElementById('locate-btn');
 
-    // Autocomplete
+    // Autocomplete function
 
-    let acList       = null;   // the dropdown <ul>
-    let acItems      = [];     // current suggestion objects
-    let acIndex      = -1;     // keyboard-highlighted index
+    let acList       = null;
+    let acItems      = [];
+    let acIndex      = -1;
     let acDebounce   = null;
     let acLastQuery  = '';
     let acJustSelected = false;
     let outfitInFlight = false;
+    let locating       = false;
+    let lastLoaded     = '';
 
     function buildAcList() {
         if (acList) return;
@@ -102,6 +104,7 @@
         acJustSelected = true;
         closeAc();
         if (cityInput) cityInput.value = s.label;
+        lastLoaded = s.label;
         loadOutfitForCity(s.label, s.label);
     }
 
@@ -155,27 +158,38 @@
             }
         });
     }
-
     // Entry point
 
     function init() {
         const prefilledCity = cityInput && cityInput.value.trim();
 
         if (prefilledCity) {
+            lastLoaded = prefilledCity;
             loadOutfitForCity(prefilledCity);
+        } else {
+            // First visit: no city yet. Show the welcome card instead of skeletons, and only auto-locate if permission was granted before (so the browser prompt never appears without a click).
+            showWelcome();
+            autoLocateIfAlreadyAllowed();
         }
 
-        // Locate-me button
+        // Locate-me button in the search bar
         if (locateBtn) {
-            locateBtn.addEventListener('click', function () {
-                locateAndLoad();
+            locateBtn.addEventListener('click', locateAndLoad);
+        }
+
+        // Buttons on the first-visit welcome card
+        const welcomeLocate = document.getElementById('welcome-locate-btn');
+        const welcomeType   = document.getElementById('welcome-type-btn');
+        if (welcomeLocate) welcomeLocate.addEventListener('click', locateAndLoad);
+        if (welcomeType) {
+            welcomeType.addEventListener('click', function () {
+                hideLocateMsg();
+                if (cityInput) cityInput.focus();
             });
         }
 
         // City input - search on Enter or blur if value changed
         if (cityInput) {
-            let lastLoaded = cityInput.value.trim();
-
             cityInput.addEventListener('keydown', function (e) {
                 if (e.key === 'Enter' && (!acList || acList.style.display === 'none')) {
                     e.preventDefault();
@@ -203,6 +217,7 @@
     async function loadOutfitForCity(city, displayLabel) {
         if (outfitInFlight) return;
         outfitInFlight = true;
+        hideLocateMsg();
         showWeatherLoading();
         showOutfitLoading();
 
@@ -212,9 +227,11 @@
                 body:   { city },
             });
 
-            if (cityInput) cityInput.value = displayLabel || data.city_name || city;
+            const label = displayLabel || data.city_name || city;
+            if (cityInput) cityInput.value = label;
+            lastLoaded = label;
             window.renderOutfit      && window.renderOutfit(data);
-            window.loadForecastStrip && window.loadForecastStrip(displayLabel || data.city_name || city);
+            window.loadForecastStrip && window.loadForecastStrip(label);
 
         } catch (err) {
             showWeatherError(err.code);
@@ -224,99 +241,151 @@
         }
     }
 
-    // Load outfit by browser geolocation
+    // Load outfit by coordinates (after geolocation succeeds)
+
+    async function loadOutfitForCoords(lat, lng) {
+        if (outfitInFlight) return;
+        outfitInFlight = true;
+        hideLocateMsg();
+        showWeatherLoading();
+        showOutfitLoading();
+
+        try {
+            const data = await apiFetch('/api/outfit', {
+                method: 'POST',
+                body:   { lat, lng },
+            });
+
+            if (data.city_name) {
+                if (cityInput) cityInput.value = data.city_name;
+                lastLoaded = data.city_name;
+            }
+            window.renderOutfit && window.renderOutfit(data);
+            if (data.city_name) {
+                window.loadForecastStrip && window.loadForecastStrip(data.city_name);
+            }
+
+        } catch (err) {
+            showWeatherError(err.code);
+            console.error('Outfit load failed:', err.message);
+        } finally {
+            outfitInFlight = false;
+        }
+    }
+
+    // Browser geolocation
+
+    function autoLocateIfAlreadyAllowed() {
+        if (!navigator.geolocation || !navigator.permissions) return;
+        navigator.permissions.query({ name: 'geolocation' })
+            .then(function (status) {
+                if (status.state === 'granted') locateAndLoad();
+            })
+            .catch(function () { /* Permissions API unsupported: wait for a click */ });
+    }
 
     function locateAndLoad() {
+        if (locating || outfitInFlight) return;
+
         if (!navigator.geolocation) {
-            // No geolocation support - prompt user to type a city
-            showWeatherError();
-            if (cityInput) {
-                cityInput.value       = '';
-                cityInput.placeholder = 'Enter your city to get started';
-                cityInput.focus();
-            }
+            showLocateMsg('Your browser cannot share your location. Type your city instead.');
             return;
         }
 
-        showWeatherLoading();
-        showOutfitLoading();
+        locating = true;
         setLocateBtnLoading(true);
 
+        // Safety net: if the permission prompt is ignored or dismissed, the browser never calls either callback. Don't leave the button stuck.
+        let gaveUp = false;
+        const guard = setTimeout(function () {
+            gaveUp   = true;
+            locating = false;
+            setLocateBtnLoading(false);
+            showLocateMsg('Still waiting for your location. Check the prompt by the address bar, or type your city.');
+        }, 20000);
+
         navigator.geolocation.getCurrentPosition(
-            // Success
-            async function (position) {
+            function (position) {
+                clearTimeout(guard);
+                locating = false;
                 setLocateBtnLoading(false);
-                const { latitude: lat, longitude: lng } = position.coords;
-
-                try {
-                    const data = await apiFetch('/api/outfit', {
-                        method: 'POST',
-                        body:   { lat, lng },
-                    });
-
-                    if (cityInput && data.city_name) {
-                        cityInput.value = data.city_name;
-                    }
-
-                    window.renderOutfit      && window.renderOutfit(data);
-                    window.loadForecastStrip && window.loadForecastStrip(
-                        cityInput ? cityInput.value.trim() : ''
-                    );
-
-                } catch (err) {
-                    showWeatherError(err.code);
-                    console.error('Outfit load failed:', err.message);
-                }
+                // Load even if the safety net fired: the user allowed it late.
+                loadOutfitForCoords(position.coords.latitude, position.coords.longitude);
             },
-            // Denied / error - do not assume any city
             function (err) {
+                clearTimeout(guard);
+                locating = false;
                 setLocateBtnLoading(false);
-                console.warn('Geolocation error:', err.message);
-                showWeatherError(null);
-                if (cityInput) {
-                    cityInput.value       = '';
-                    cityInput.placeholder = 'Enter your city to get started';
-                    cityInput.focus();
-                }
+                console.warn('Geolocation error', err.code, err.message);
+                if (!gaveUp) showLocateMsg(geoErrorMessage(err));
             },
-            { timeout: 8000, maximumAge: 300000 }
+            { enableHighAccuracy: false, timeout: 10000, maximumAge: 600000 }
         );
+    }
+
+    function geoErrorMessage(err) {
+        if (err.code === 1) {
+            return 'Location is blocked for this site. Allow it from the icon in the address bar, or type your city.';
+        }
+        if (err.code === 2) {
+            return "Your device couldn't work out where you are. Check that location services are on, or type your city.";
+        }
+        return 'Finding your location took too long. Try again, or type your city.';
     }
 
     // UI helpers
 
+    function setHidden(id, hidden) {
+        const el = document.getElementById(id);
+        if (el) el.hidden = hidden;
+    }
+
+    function showWelcome() {
+        setHidden('weather-skeleton', true);
+        setHidden('weather-content',  true);
+        setHidden('weather-error',    true);
+        setHidden('weather-welcome',  false);
+        setHidden('outfit-skeleton',  true);
+        setHidden('items-skeleton',   true);
+        setHidden('items-idle',       false);
+    }
+
+    function showLocateMsg(text) {
+        const el = document.getElementById('locate-msg');
+        if (el) {
+            el.textContent = text;
+            el.hidden = false;
+        }
+        if (cityInput) cityInput.focus();
+    }
+
+    function hideLocateMsg() {
+        setHidden('locate-msg', true);
+    }
+
     function showWeatherLoading() {
-        const skeleton = document.getElementById('weather-skeleton');
-        const content  = document.getElementById('weather-content');
-        const error    = document.getElementById('weather-error');
-        if (skeleton) skeleton.hidden = false;
-        if (content)  content.hidden  = true;
-        if (error)    error.hidden    = true;
+        setHidden('weather-welcome',  true);
+        setHidden('weather-skeleton', false);
+        setHidden('weather-content',  true);
+        setHidden('weather-error',    true);
     }
 
     function showOutfitLoading() {
-        const outfitSkeleton = document.getElementById('outfit-skeleton');
-        const outfitMeta     = document.getElementById('outfit-meta');
-        const itemsSkeleton  = document.getElementById('items-skeleton');
-        const itemList       = document.getElementById('item-list');
-        const notes          = document.getElementById('notes-container');
-
-        if (outfitSkeleton) outfitSkeleton.hidden = false;
-        if (outfitMeta)     outfitMeta.hidden     = true;
-        if (itemsSkeleton)  itemsSkeleton.hidden  = false;
-        if (itemList)       itemList.hidden       = true;
-        if (notes)          notes.hidden          = true;
+        setHidden('items-idle',      true);
+        setHidden('outfit-skeleton', false);
+        setHidden('outfit-meta',     true);
+        setHidden('items-skeleton',  false);
+        setHidden('item-list',       true);
+        setHidden('notes-container', true);
     }
 
     function showWeatherError(code) {
-        const skeleton   = document.getElementById('weather-skeleton');
-        const content    = document.getElementById('weather-content');
-        const error      = document.getElementById('weather-error');
-        const errorMsg   = document.getElementById('weather-error-msg');
-        if (skeleton) skeleton.hidden = true;
-        if (content)  content.hidden  = true;
-        if (error)    error.hidden    = false;
+        setHidden('weather-welcome',  true);
+        setHidden('weather-skeleton', true);
+        setHidden('weather-content',  true);
+        setHidden('weather-error',    false);
 
+        const errorMsg = document.getElementById('weather-error-msg');
         if (errorMsg) {
             if (code === 'rate_limited') {
                 errorMsg.textContent = 'Weather service is busy, please try again in a moment.';
@@ -327,14 +396,18 @@
     }
 
     function setLocateBtnLoading(loading) {
-        if (!locateBtn) return;
-        if (loading) {
-            locateBtn.innerHTML = '<span class="spinner spinner-sm" aria-hidden="true"></span> Locating...';
-            locateBtn.disabled  = true;
-        } else {
-            locateBtn.innerHTML = '<i class="ti ti-current-location" aria-hidden="true"></i> Locate me';
-            locateBtn.disabled  = false;
-        }
+        const buttons = [locateBtn, document.getElementById('welcome-locate-btn')];
+        buttons.forEach(function (btn) {
+            if (!btn) return;
+            if (loading) {
+                if (!btn.dataset.label) btn.dataset.label = btn.innerHTML;
+                btn.innerHTML = '<span class="spinner spinner-sm" aria-hidden="true"></span> Locating...';
+                btn.disabled  = true;
+            } else {
+                if (btn.dataset.label) btn.innerHTML = btn.dataset.label;
+                btn.disabled  = false;
+            }
+        });
     }
 
     // Expose globals
@@ -353,5 +426,4 @@
         attachAutocomplete();
         init();
     }
-
 })();

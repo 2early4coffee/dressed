@@ -77,6 +77,34 @@ def _migrate_anon_data(anon_token: str, user_id: int) -> None:
         logger.error("Anon migration failed: %s", e)
 
 
+def _migrate_anon_trips(anon_token: str, user_id: int) -> None:
+    """On login to an existing account: move trips and feedback made while
+    signed out onto the account. The account keeps its own preferences."""
+    try:
+        Trip.query.filter_by(session_token=anon_token).update(
+            {"user_id": user_id, "session_token": None},
+            synchronize_session="fetch",
+        )
+        Feedback.query.filter_by(session_token=anon_token).update(
+            {"user_id": user_id, "session_token": None},
+            synchronize_session="fetch",
+        )
+        db.session.commit()
+        logger.info("Moved anon trips %s... to user %d on login", anon_token[:8], user_id)
+
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.error("Anon trip migration on login failed: %s", e)
+
+
+def _safe_next() -> str:
+    """Where to send the user after login/register. Relative URLs only."""
+    next_url = request.args.get("next") or request.form.get("next") or ""
+    if next_url.startswith("/") and not next_url.startswith("//"):
+        return next_url
+    return ""
+
+
 def _validate_password(password: str) -> list[str]:
     errors = []
     if len(password) < 8:
@@ -159,8 +187,9 @@ def register_post():
     logger.info("New user registered: %s", username)
     flash("Welcome to Dressed! Your account has been created.", "success")
 
-    # Redirect to profile setup so they can set preferences immediately
-    return redirect(url_for("main.profile"))
+    # Back to the page they came from (e.g. their packing list), otherwise
+    # to profile setup so they can set preferences immediately
+    return redirect(_safe_next() or url_for("main.profile"))
 
 # Login
 
@@ -202,6 +231,11 @@ def login_post():
     # Success
     _log_attempt(ip_address, username, success=True)
 
+    # Move any trips planned while signed out onto this account
+    anon_token = request.cookies.get("dressed_anon_token")
+    if anon_token:
+        _migrate_anon_trips(anon_token, user.id)
+
     # Clear old session before setting new user_id (session fixation prevention)
     session.clear()
     session["user_id"] = user.id
@@ -210,13 +244,8 @@ def login_post():
     logger.info("User logged in: %s", username)
 
     # Redirect to the page they were trying to reach, or home
-    next_url = request.args.get("next") or url_for("main.index")
-
-    # Security: only redirect to relative URLs (prevent open redirect)
-    if next_url.startswith("/") and not next_url.startswith("//"):
-        return redirect(next_url)
-
-    return redirect(url_for("main.index"))
+    # (_safe_next only allows relative URLs, preventing open redirects)
+    return redirect(_safe_next() or url_for("main.index"))
 
 # Logout
 @auth.route("/logout")

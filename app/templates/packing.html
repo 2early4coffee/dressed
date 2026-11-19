@@ -266,6 +266,49 @@
     }
 
     .weather-pill .ti { font-size: 0.95rem; }
+
+    /* Save to account (visitors) / saved status (signed in) */
+    .save-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--sp-4);
+        flex-wrap: wrap;
+        margin-bottom: var(--sp-6);
+        padding: var(--sp-4);
+        border-left: 3px solid var(--green-500);
+    }
+
+    .save-card-text { flex: 1; min-width: 240px; }
+
+    .save-card-title {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-2);
+        font-size: 0.95rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 2px;
+    }
+
+    .save-card-title .ti { color: var(--green-600); font-size: 1.1rem; }
+
+    .save-card-hint { font-size: 0.82rem; color: var(--text-muted); line-height: 1.45; }
+
+    .save-card-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+
+    .save-status {
+        display: flex;
+        align-items: center;
+        gap: var(--sp-2);
+        margin-bottom: var(--sp-6);
+        font-size: 0.85rem;
+        color: var(--text-muted);
+    }
+
+    .save-status .ti { color: var(--green-600); font-size: 1rem; }
+    .save-status a { color: var(--green-700); font-weight: 600; text-decoration: none; }
+    .save-status a:hover { text-decoration: underline; }
 </style>
 {% endblock %}
 
@@ -329,6 +372,27 @@
         </div>
         <span class="progress-label" id="progress-label">{{ checked_count }}/{{ total_items }}</span>
     </div>
+
+    {# Save to account / saved status #}
+    {% if user %}
+    <div class="save-status">
+        <i class="ti ti-circle-check" aria-hidden="true"></i>
+        <span>Saved to your account. Open it on any device from <a href="{{ url_for('main.trips_list') }}">My trips</a>.</span>
+    </div>
+    {% else %}
+    <div class="card save-card" role="region" aria-label="Save this list">
+        <div class="save-card-text">
+            <div class="save-card-title">
+                <i class="ti ti-device-floppy" aria-hidden="true"></i> Keep this list
+            </div>
+            <p class="save-card-hint">It's only saved on this browser for now. Create a free account to open it on any device, ticks included.</p>
+        </div>
+        <div class="save-card-actions">
+            <a href="{{ url_for('auth.register', next=request.path) }}" class="btn btn-primary btn-sm">Save to my account</a>
+            <a href="{{ url_for('auth.login', next=request.path) }}" class="btn btn-ghost btn-sm">Sign in</a>
+        </div>
+    </div>
+    {% endif %}
 
     {# Destination pills (from dest_summary) #}
     {% if dest_summary %}

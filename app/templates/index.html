@@ -519,6 +519,49 @@
     }
 
     .items-idle { font-size: 0.875rem; color: var(--text-muted); }
+
+    /* One-time "What do you usually wear?" question */
+    .wardrobe-ask-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--sp-2);
+        margin-bottom: var(--sp-1);
+    }
+    .wardrobe-ask-title { font-size: 0.95rem; font-weight: 700; color: var(--text-primary); }
+    .wardrobe-ask-close {
+        border: none;
+        background: none;
+        color: var(--text-muted);
+        font-size: 1.1rem;
+        line-height: 1;
+        cursor: pointer;
+        padding: var(--sp-1);
+        border-radius: var(--r-sm);
+    }
+    .wardrobe-ask-close:hover { color: var(--text-primary); background: var(--surface); }
+    .wardrobe-ask-hint { font-size: 0.82rem; color: var(--text-muted); margin-bottom: var(--sp-3); }
+    .wardrobe-options { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-2); }
+    .wardrobe-option {
+        padding: 0.55rem 0.75rem;
+        border-radius: var(--r-full);
+        border: 1.5px solid var(--border);
+        background: rgba(255,255,255,0.85);
+        font-family: var(--font-sans);
+        font-size: 0.85rem;
+        font-weight: 500;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: border-color var(--tx-fast), background var(--tx-fast), color var(--tx-fast);
+    }
+    .wardrobe-option:hover {
+        border-color: var(--green-500);
+        background: var(--green-50);
+        color: var(--green-700);
+    }
+    .wardrobe-option:disabled { opacity: 0.6; cursor: wait; }
+    .wardrobe-ask-status { font-size: 0.85rem; color: var(--green-700); font-weight: 500; }
+    .wardrobe-ask-error { font-size: 0.82rem; color: #B03A2E; margin-top: var(--sp-2); }
 </style>
 
 {% endblock %}
@@ -688,6 +731,28 @@
         {# Right: outfit panel #}
         <div class="outfit-panel">
 
+            {# One-time wardrobe question (only when no preferences are saved yet) #}
+            {% if ask_wardrobe %}
+            <div class="card card-sm wardrobe-ask" id="wardrobe-ask" role="region" aria-labelledby="wardrobe-ask-title">
+                <div class="wardrobe-ask-head">
+                    <span class="wardrobe-ask-title" id="wardrobe-ask-title">What do you usually wear?</span>
+                    <button type="button" class="wardrobe-ask-close" id="wardrobe-ask-close" aria-label="Dismiss this question">
+                        <i class="ti ti-x" aria-hidden="true"></i>
+                    </button>
+                </div>
+                <div id="wardrobe-ask-body">
+                    <p class="wardrobe-ask-hint">We'll suggest pieces that suit your wardrobe. You can change this any time in Preferences.</p>
+                    <div class="wardrobe-options" role="group" aria-label="Wardrobe options">
+                        <button type="button" class="wardrobe-option" data-wardrobe="menswear">Menswear</button>
+                        <button type="button" class="wardrobe-option" data-wardrobe="womenswear">Womenswear</button>
+                        <button type="button" class="wardrobe-option" data-wardrobe="both">A mix of both</button>
+                        <button type="button" class="wardrobe-option" data-wardrobe="neutral">No preference</button>
+                    </div>
+                    <p class="wardrobe-ask-error" id="wardrobe-ask-error" role="alert" hidden></p>
+                </div>
+            </div>
+            {% endif %}
+
             {# Outfit hero card #}
             <div class="card" role="region" aria-label="Today's outfit recommendation" id="outfit-hero">
 
@@ -760,6 +825,51 @@
             weekday: 'short', day: 'numeric', month: 'short'
         });
     }
+
+    // One-time wardrobe question
+    (function () {
+        const card = document.getElementById('wardrobe-ask');
+        if (!card) return;
+
+        const DISMISS_KEY = 'dressed_wardrobe_dismissed';
+        try {
+            if (localStorage.getItem(DISMISS_KEY)) { card.hidden = true; return; }
+        } catch (_) { /* storage unavailable: keep showing */ }
+
+        const body    = document.getElementById('wardrobe-ask-body');
+        const errorEl = document.getElementById('wardrobe-ask-error');
+        const buttons = card.querySelectorAll('[data-wardrobe]');
+
+        document.getElementById('wardrobe-ask-close').addEventListener('click', function () {
+            try { localStorage.setItem(DISMISS_KEY, '1'); } catch (_) {}
+            card.hidden = true;
+        });
+
+        buttons.forEach(function (btn) {
+            btn.addEventListener('click', async function () {
+                buttons.forEach(function (b) { b.disabled = true; });
+                errorEl.hidden = true;
+                try {
+                    await apiFetch('/api/profile/wardrobe', {
+                        method: 'POST',
+                        body:   { wardrobe_pref: btn.dataset.wardrobe },
+                    });
+                    body.innerHTML = '<p class="wardrobe-ask-status"><i class="ti ti-circle-check" aria-hidden="true"></i> Saved. Your suggestions now match your wardrobe.</p>';
+                    // Re-run today's outfit so the items reflect the new choice
+                    const city = (document.getElementById('city-input') || {}).value;
+                    if (city && city.trim() && window.loadOutfitForCity) {
+                        window.loadOutfitForCity(city.trim());
+                    }
+                    setTimeout(function () { card.hidden = true; }, 3000);
+                } catch (err) {
+                    buttons.forEach(function (b) { b.disabled = false; });
+                    errorEl.textContent = 'Could not save that. Please try again.';
+                    errorEl.hidden = false;
+                    console.error('Wardrobe save failed:', err && err.message);
+                }
+            });
+        });
+    })();
 
     // Retry button
     const retryBtn = document.getElementById('retry-btn');

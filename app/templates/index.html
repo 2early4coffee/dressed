@@ -352,34 +352,64 @@
     }
 
     /* Outfit hero */
-    .outfit-image-wrap {
-        width: 100%;
-        height: 280px;
-        border-radius: var(--r-lg);
-        background: linear-gradient(135deg, rgba(45,122,82,0.12) 0%, rgba(82,183,136,0.08) 100%);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-bottom: var(--sp-4);
-        border: 1px solid var(--border);
+    .card.outfit-hero {
+        padding: 0;
         overflow: hidden;
     }
 
+    .outfit-image-wrap {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 4 / 5;
+        background: linear-gradient(160deg, rgba(45,122,82,0.16) 0%, rgba(82,183,136,0.06) 100%);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
     .outfit-image-wrap img {
+        position: absolute;
+        inset: 0;
         width: 100%;
         height: 100%;
-        object-fit: cover;
-        border-radius: var(--r-lg);
+        object-fit: contain;
+        background: #0d2b1f;
+    }
+
+    .outfit-label {
+        position: absolute;
+        top: var(--sp-3);
+        left: var(--sp-3);
+        z-index: 1;
+        padding: 0.3rem 0.7rem;
+        border-radius: 999px;
+        background: rgba(255,255,255,0.9);
+        font-size: 0.7rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--green-700);
     }
 
     .outfit-emoji-placeholder {
-        font-size: 4rem;
-        opacity: 0.5;
+        font-size: 4.5rem;
+        opacity: 0.45;
+    }
+
+    .outfit-caption {
+        padding: var(--sp-4) var(--sp-5) var(--sp-5);
+        border-top: 1px solid var(--border);
+    }
+
+    .outfit-caption-idle {
+        font-size: 0.875rem;
+        color: var(--text-muted);
     }
 
     .outfit-name {
-        font-size: 1.1rem;
+        font-size: 1.15rem;
         font-weight: 700;
+        letter-spacing: -0.01em;
         color: var(--text-primary);
         margin-bottom: var(--sp-2);
     }
@@ -754,25 +784,25 @@
             {% endif %}
 
             {# Outfit hero card #}
-            <div class="card" role="region" aria-label="Today's outfit recommendation" id="outfit-hero">
-
-                <div class="card-label">Today's outfit</div>
+            <div class="card outfit-hero" role="region" aria-label="Today's outfit recommendation" id="outfit-hero">
 
                 <div class="outfit-image-wrap">
-                    <img id="outfit-img" src="" alt="" hidden
-                         style="width:100%; height:100%; object-fit:contain; background:#0d2b1f;">
+                    <span class="outfit-label">Today's outfit</span>
+                    <img id="outfit-img" src="" alt="" hidden>
                     <div class="outfit-emoji-placeholder" id="outfit-placeholder" aria-hidden="true">👕</div>
                 </div>
 
-                {# Loading skeleton #}
-                <div id="outfit-skeleton">
-                    <div class="skeleton skeleton-line" style="width:70%;margin-bottom:0.5rem"></div>
-                    <div class="skeleton skeleton-line" style="width:40%;height:22px"></div>
-                </div>
+                <div class="outfit-caption">
+                    {# Loading skeleton #}
+                    <div id="outfit-skeleton">
+                        <div class="skeleton skeleton-line" style="width:70%;margin-bottom:0.5rem"></div>
+                        <div class="skeleton skeleton-line" style="width:40%;height:22px"></div>
+                    </div>
 
-                <div id="outfit-meta" hidden>
-                    <div class="outfit-name" id="outfit-name">--</div>
-                    <div class="outfit-tags" id="outfit-tags"></div>
+                    <div id="outfit-meta" hidden>
+                        <div class="outfit-name" id="outfit-name">--</div>
+                        <div class="outfit-tags" id="outfit-tags"></div>
+                    </div>
                 </div>
 
             </div>

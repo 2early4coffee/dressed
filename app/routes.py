@@ -262,6 +262,7 @@ def index():
         last_city    = last_city,
         profile      = g.profile_dict,
         user         = g.user,
+        ask_wardrobe = g.profile is None,
     )
 
 
@@ -598,6 +599,37 @@ def profile_save():
     return redirect(url_for("main.index"))
 
 # API routes - return JSON
+
+@main.route("/api/profile/wardrobe", methods=["POST"])
+def api_profile_wardrobe():
+    """Save the wardrobe answer from the homepage question."""
+    data  = request.get_json(silent=True) or {}
+    value = data.get("wardrobe_pref", "")
+
+    if value not in {"menswear", "womenswear", "both", "neutral"}:
+        return jsonify({"error": "Invalid wardrobe preference."}), 400
+
+    if not g.user_id and not g.session_token:
+        return jsonify({"error": "No session found. Please enable cookies and reload."}), 400
+
+    if g.profile:
+        g.profile.wardrobe_pref = value
+    else:
+        db.session.add(Profile(
+            user_id       = g.user_id,
+            session_token = g.session_token if not g.user_id else None,
+            wardrobe_pref = value,
+        ))
+
+    try:
+        db.session.commit()
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.error("Wardrobe save failed: %s", e)
+        return jsonify({"error": "Could not save preference."}), 500
+
+    return jsonify({"ok": True, "wardrobe_pref": value})
+
 
 @main.route("/api/outfit", methods=["POST"])
 def api_outfit():
